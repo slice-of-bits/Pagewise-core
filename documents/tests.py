@@ -3,7 +3,7 @@ import os
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from unittest.mock import patch, MagicMock
-from documents.models import Document, Page, Image, DoclingSettings, ProcessingStatus
+from documents.models import Document, Page, Image, DoclingSettings, OcrSettings, ProcessingStatus
 # from documents.tasks import process_document, generate_thumbnail, clean_markdown_text  # Commented out for now
 from bucket.models import Bucket
 import json
@@ -112,6 +112,60 @@ class DoclingSettingsTest(TestCase):
         settings1 = DoclingSettings.get_default_settings()
         settings2 = DoclingSettings.get_default_settings()
         self.assertEqual(settings1.id, settings2.id)
+
+
+class OcrSettingsTest(TestCase):
+    def test_get_default_settings(self):
+        """Test getting default OCR settings creates them if they don't exist"""
+        settings = OcrSettings.get_default_settings()
+        self.assertEqual(settings.name, "default")
+        self.assertEqual(settings.paddleocr_model, "paddleocr-vl")
+        self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
+        self.assertFalse(settings.use_ocrmypdf)
+
+    def test_singleton_behavior(self):
+        """Test that get_default_settings returns the same instance"""
+        settings1 = OcrSettings.get_default_settings()
+        settings2 = OcrSettings.get_default_settings()
+        self.assertEqual(settings1.id, settings2.id)
+    
+    def test_document_get_ocr_settings(self):
+        """Test document can get OCR settings (per-document or default)"""
+        bucket = Bucket.objects.create(name="Test Bucket")
+        
+        # Create a mock file to avoid S3 connection
+        mock_file = SimpleUploadedFile("test.pdf", b"fake pdf content", content_type="application/pdf")
+        
+        # Test with default settings
+        with patch('documents.models.document_upload_path', return_value='test.pdf'):
+            with patch('django.core.files.storage.default_storage.save', return_value='test.pdf'):
+                doc1 = Document(
+                    title="Test Document 1",
+                    group=bucket,
+                )
+                doc1.original_pdf = mock_file
+                doc1.save()
+                
+                self.assertEqual(doc1.get_ocr_settings().name, "default")
+                
+                # Test with custom settings
+                custom_settings = OcrSettings.objects.create(
+                    name="custom",
+                    paddleocr_model="custom-model",
+                    use_ocrmypdf=True
+                )
+                
+                mock_file2 = SimpleUploadedFile("test2.pdf", b"fake pdf content", content_type="application/pdf")
+                doc2 = Document(
+                    title="Test Document 2",
+                    group=bucket,
+                    ocr_settings=custom_settings
+                )
+                doc2.original_pdf = mock_file2
+                doc2.save()
+                
+                self.assertEqual(doc2.get_ocr_settings().name, "custom")
+                self.assertTrue(doc2.get_ocr_settings().use_ocrmypdf)
 
 
 class TasksTest(TestCase):
