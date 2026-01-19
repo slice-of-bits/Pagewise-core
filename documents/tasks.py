@@ -198,7 +198,7 @@ def apply_ocrmypdf(document_id: int):
             # Upload the OCR'd PDF back to storage, replacing the original
             with open(output_path, 'rb') as ocr_pdf:
                 document.original_pdf.save(
-                    document.original_pdf.name.split('/')[-1],
+                    os.path.basename(document.original_pdf.name),
                     ContentFile(ocr_pdf.read()),
                     save=False
                 )
@@ -442,7 +442,10 @@ def process_page(page_id: int):
                     pass
 
         # Clean text - PaddleOCR-VL should handle this better than Docling
-        page.text_markdown_clean = clean_markdown_text(page.ocr_markdown_raw)
+        if page.ocr_markdown_raw:
+            page.text_markdown_clean = clean_markdown_text(page.ocr_markdown_raw)
+        else:
+            page.text_markdown_clean = ""
 
         # Extract images from the page if needed
         # Note: This would require additional logic to detect and extract images

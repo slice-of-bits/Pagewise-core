@@ -107,6 +107,8 @@ class Page(BaseModel):
     )
 
     # PaddleOCR-VL data
+    # Stores PaddleOCR-VL layout and processing metadata including model version, timestamp,
+    # and any layout/structure information returned by the OCR model
     paddleocr_layout = models.JSONField(blank=True, null=True)
 
     # search

@@ -400,15 +400,11 @@ def update_default_ocr_settings(request, payload: OcrSettingsUpdateSchema):
 @router.delete("/settings/ocr/{sqid}")
 def delete_ocr_settings(request, sqid: str):
     """Delete OCR settings (cannot delete default)"""
-    from django.http import JsonResponse
-    
     settings = get_object_or_404(OcrSettings, sqid=sqid)
     
     if settings.name == 'default':
-        return JsonResponse(
-            {"error": "Cannot delete default settings"},
-            status=403  # Forbidden - business rule violation
-        )
+        from ninja.errors import HttpError
+        raise HttpError(403, "Cannot delete default settings")
     
     settings.delete()
     return {"success": True}
