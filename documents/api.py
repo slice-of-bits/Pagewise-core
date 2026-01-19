@@ -24,7 +24,7 @@ router = Router()
 @router.get("/documents/", response=List[DocumentSchema])
 @paginate
 def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
-    """Get all documents, optionally filtered by bucket"""
+    """Get all documents, optionally filtered by group"""
     queryset = Document.objects.select_related('group').all()
     queryset = filters.filter(queryset)
     return queryset
