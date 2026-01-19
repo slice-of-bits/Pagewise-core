@@ -58,7 +58,7 @@ class PageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Advanced', {
-            'fields': ('paddleocr_layout', 'metadata'),
+            'fields': ('marker_layout', 'metadata'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -120,15 +120,15 @@ class DoclingSettingsAdmin(admin.ModelAdmin):
 
 @admin.register(OcrSettings)
 class OcrSettingsAdmin(admin.ModelAdmin):
-    list_display = ['name', 'paddleocr_model', 'use_ocrmypdf', 'language', 'updated_at']
+    list_display = ['name', 'force_ocr', 'use_ocrmypdf', 'language', 'updated_at']
     readonly_fields = ['sqid', 'created_at', 'updated_at']
 
     fieldsets = (
         (None, {
             'fields': ('name',)
         }),
-        ('Ollama Configuration', {
-            'fields': ('ollama_base_url', 'paddleocr_model')
+        ('Marker Configuration', {
+            'fields': ('force_ocr',)
         }),
         ('OCRmyPDF Settings', {
             'fields': ('use_ocrmypdf', 'ocrmypdf_language', 'ocrmypdf_compression')

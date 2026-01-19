@@ -119,8 +119,7 @@ class OcrSettingsTest(TestCase):
         """Test getting default OCR settings creates them if they don't exist"""
         settings = OcrSettings.get_default_settings()
         self.assertEqual(settings.name, "default")
-        self.assertEqual(settings.paddleocr_model, "paddleocr-vl")
-        self.assertEqual(settings.ollama_base_url, "http://localhost:11434")
+        self.assertFalse(settings.force_ocr)
         self.assertFalse(settings.use_ocrmypdf)
 
     def test_singleton_behavior(self):
@@ -151,7 +150,7 @@ class OcrSettingsTest(TestCase):
                 # Test with custom settings
                 custom_settings = OcrSettings.objects.create(
                     name="custom",
-                    paddleocr_model="custom-model",
+                    force_ocr=True,
                     use_ocrmypdf=True
                 )
                 

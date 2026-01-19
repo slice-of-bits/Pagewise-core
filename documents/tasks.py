@@ -3,7 +3,6 @@ import logging
 import tempfile
 import time
 import json
-import base64
 
 from celery import shared_task
 from django.core.files.base import ContentFile
@@ -11,7 +10,9 @@ from django.core.files.storage import default_storage
 from django.contrib.postgres.search import SearchVector
 import fitz  # PyMuPDF
 import ocrmypdf
-import ollama
+from marker.converters.pdf import PdfConverter
+from marker.models import create_model_dict
+from marker.output import text_from_rendered
 
 from documents.models import Document, Page, Image, ProcessingStatus, OcrSettings
 
@@ -337,7 +338,7 @@ def split_pdf_pages(document_id: int):
 
 @shared_task
 def process_page(page_id: int):
-    """Process a single page with PaddleOCR-VL via Ollama"""
+    """Process a single page with Marker PDF converter"""
     try:
         page = Page.objects.get(id=page_id)
         page.processing_status = ProcessingStatus.PROCESSING
@@ -358,73 +359,66 @@ def process_page(page_id: int):
                 tmp_file.write(content)
             pdf_path = tmp_file.name
 
-        # Convert PDF page to image for PaddleOCR-VL
-        image_path = None
+        # Use Marker PDF to convert the page
         try:
             logger.info(f"Processing page {page.page_number} of document {page.document.title}")
             
-            # Convert PDF to image and validate page count first
-            pdf_doc = fitz.open(pdf_path)
+            # Create Marker converter with configuration
+            config = {
+                "force_ocr": settings.force_ocr,
+                "language": settings.language,
+            }
             
-            # Verify PDF has exactly one page before processing
-            page_count = len(pdf_doc)
-            if page_count != 1:
-                logger.error(f"Page PDF should have exactly 1 page, found {page_count}")
-                pdf_doc.close()
-                page.processing_status = ProcessingStatus.FAILED
-                page.save()
-                return
+            # Add any custom settings from settings_json
+            if settings.settings_json:
+                config.update(settings.settings_json)
             
-            # Now that we've validated, process the page
-            first_page = pdf_doc[0]
-            mat = fitz.Matrix(2, 2)  # 2x zoom for better quality
-            pix = first_page.get_pixmap(matrix=mat)
+            converter = PdfConverter(
+                artifact_dict=create_model_dict(),
+            )
             
-            # Save to temporary image file
-            image_fd, image_path = tempfile.mkstemp(suffix='.png')
-            os.close(image_fd)
-            pix.save(image_path)
-            pdf_doc.close()
+            # Convert the page
+            rendered = converter(pdf_path)
             
-            # Call PaddleOCR-VL via Ollama
-            try:
-                client = ollama.Client(host=settings.ollama_base_url)
+            # Extract markdown and images
+            markdown_text, metadata, images = text_from_rendered(rendered)
+            
+            page.ocr_markdown_raw = markdown_text
+            
+            # Store metadata from Marker
+            page.marker_layout = {
+                'metadata': metadata if metadata else {},
+                'processed_at': str(time.time()),
+                'force_ocr': settings.force_ocr,
+            }
+            
+            # Extract and save images
+            if images:
+                for img_name, img_data in images.items():
+                    try:
+                        # Save image to storage
+                        image_obj = Image.objects.create(
+                            page=page,
+                            caption=f"Extracted from page {page.page_number}",
+                            metadata={'source': 'marker', 'original_name': img_name}
+                        )
+                        
+                        # Save the image data
+                        image_content = ContentFile(img_data)
+                        image_obj.image_file.save(img_name, image_content, save=True)
+                        
+                        logger.info(f"Saved image {img_name} from page {page.page_number}")
+                    except Exception as e:
+                        logger.error(f"Error saving image {img_name} from page {page.id}: {e}")
                 
-                # Read image as base64
-                with open(image_path, 'rb') as img_file:
-                    image_data = base64.b64encode(img_file.read()).decode('utf-8')
-                
-                # Call Ollama with PaddleOCR-VL model
-                response = client.generate(
-                    model=settings.paddleocr_model,
-                    prompt='Convert this page to markdown format. Ignore page numbers and headers/footers. Handle multiple columns properly.',
-                    images=[image_data],
-                )
-                
-                # Extract markdown from response - validate response structure
-                if not isinstance(response, dict) or 'response' not in response:
-                    logger.error(f"Invalid response from Ollama for page {page.id}: {response}")
-                    page.processing_status = ProcessingStatus.FAILED
-                    page.save()
-                    return
-                
-                page.ocr_markdown_raw = response['response']
-                
-                # Store any layout information if available
-                page.paddleocr_layout = {
-                    'model': settings.paddleocr_model,
-                    'processed_at': str(time.time()),
-                }
-                
-            except Exception as e:
-                logger.error(f"PaddleOCR-VL conversion failed for page {page.id}: {e}")
-                # Set page as failed but don't crash the task
-                page.processing_status = ProcessingStatus.FAILED
-                page.save()
-                return
-                
+        except Exception as e:
+            logger.error(f"Marker conversion failed for page {page.id}: {e}")
+            # Set page as failed but don't crash the task
+            page.processing_status = ProcessingStatus.FAILED
+            page.save()
+            return
         finally:
-            # Clean up temporary files
+            # Clean up temporary file
             try:
                 os.unlink(pdf_path)
             except (OSError, PermissionError) as e:
@@ -434,23 +428,13 @@ def process_page(page_id: int):
                     os.unlink(pdf_path)
                 except (OSError, PermissionError):
                     logger.error(f"Could not delete temporary file even after delay: {pdf_path}")
-            
-            if image_path:
-                try:
-                    os.unlink(image_path)
-                except (OSError, PermissionError):
-                    pass
 
-        # Clean text - PaddleOCR-VL should handle this better than Docling
+        # Clean text - Marker should handle this well already
         if page.ocr_markdown_raw:
             page.text_markdown_clean = clean_markdown_text(page.ocr_markdown_raw)
         else:
             page.text_markdown_clean = ""
 
-        # Extract images from the page if needed
-        # Note: This would require additional logic to detect and extract images
-        # For now, we'll skip this as PaddleOCR-VL focuses on text extraction
-        
         # Update search vector
         try:
             page.search_vector = SearchVector('text_markdown_clean')
@@ -470,32 +454,6 @@ def process_page(page_id: int):
         page = Page.objects.get(id=page_id)
         page.processing_status = ProcessingStatus.FAILED
         page.save()
-
-
-@shared_task
-def extract_images_from_page(page_id: int, layout_data: dict):
-    """Extract images from page layout data"""
-    try:
-        page = Page.objects.get(id=page_id)
-
-        # Extract figures from layout data
-        if 'figures' in layout_data:
-            for idx, figure in enumerate(layout_data['figures']):
-                if 'image' in figure:
-                    # Save image
-                    image_name = f"page_{page.page_number}_img_{idx + 1}.jpg"
-                    image_obj = Image.objects.create(
-                        page=page,
-                        caption=figure.get('caption', ''),
-                        metadata={'figure_data': figure}
-                    )
-
-                    # Note: In a real implementation, you'd extract the actual image data
-                    # from the figure object and save it to the ImageField
-                    logger.info(f"Image extracted from page {page}: {image_name}")
-
-    except Exception as e:
-        logger.error(f"Error extracting images from page {page_id}: {str(e)}")
 
 
 def clean_markdown_text(raw_text: str) -> str:

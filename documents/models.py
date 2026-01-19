@@ -106,10 +106,10 @@ class Page(BaseModel):
         default=ProcessingStatus.PENDING
     )
 
-    # PaddleOCR-VL data
-    # Stores PaddleOCR-VL layout and processing metadata including model version, timestamp,
+    # Marker data
+    # Stores Marker layout and processing metadata including model version, timestamp,
     # and any layout/structure information returned by the OCR model
-    paddleocr_layout = models.JSONField(blank=True, null=True)
+    marker_layout = models.JSONField(blank=True, null=True)
 
     # search
     # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
@@ -145,24 +145,16 @@ class Image(BaseModel):
 
 
 class OcrSettings(BaseModel):
-    """OCR settings model for PaddleOCR-VL and OCRmyPDF configuration"""
+    """OCR settings model for Marker PDF and OCRmyPDF configuration"""
 
     name = models.CharField(max_length=100, default="default", unique=True)
-
-    # Ollama Server Configuration
-    ollama_base_url = models.CharField(
-        max_length=255,
-        default='http://localhost:11434',
-        help_text='Ollama server URL for hosting PaddleOCR-VL'
+    
+    # Marker Configuration
+    force_ocr = models.BooleanField(
+        default=False,
+        help_text='Force OCR on all pages, even those with existing text'
     )
     
-    # PaddleOCR-VL Model Settings
-    paddleocr_model = models.CharField(
-        max_length=100,
-        default='paddleocr-vl',
-        help_text='Name of the PaddleOCR-VL model in Ollama'
-    )
-
     # OCRmyPDF Settings
     use_ocrmypdf = models.BooleanField(
         default=False,
@@ -197,8 +189,7 @@ class OcrSettings(BaseModel):
         settings, _ = cls.objects.get_or_create(
             name='default',
             defaults={
-                'ollama_base_url': 'http://localhost:11434',
-                'paddleocr_model': 'paddleocr-vl',
+                'force_ocr': False,
                 'use_ocrmypdf': False,
                 'ocrmypdf_language': 'eng',
                 'ocrmypdf_compression': True,

@@ -153,8 +153,7 @@ class DoclingSettingsUpdateSchema(BaseModel):
 class OcrSettingsSchema(BaseModel):
     sqid: str
     name: str
-    ollama_base_url: str
-    paddleocr_model: str
+    force_ocr: bool
     use_ocrmypdf: bool
     ocrmypdf_language: str
     ocrmypdf_compression: bool
@@ -169,8 +168,7 @@ class OcrSettingsSchema(BaseModel):
 
 class OcrSettingsCreateSchema(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
-    ollama_base_url: str = Field(default='http://localhost:11434', max_length=255)
-    paddleocr_model: str = Field(default='paddleocr-vl', max_length=100)
+    force_ocr: bool = Field(default=False)
     use_ocrmypdf: bool = Field(default=False)
     ocrmypdf_language: str = Field(default='eng', max_length=10)
     ocrmypdf_compression: bool = Field(default=True)
@@ -179,8 +177,7 @@ class OcrSettingsCreateSchema(BaseModel):
 
 
 class OcrSettingsUpdateSchema(BaseModel):
-    ollama_base_url: Optional[str] = Field(None, max_length=255)
-    paddleocr_model: Optional[str] = Field(None, max_length=100)
+    force_ocr: Optional[bool] = None
     use_ocrmypdf: Optional[bool] = None
     ocrmypdf_language: Optional[str] = Field(None, max_length=10)
     ocrmypdf_compression: Optional[bool] = None
