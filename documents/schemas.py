@@ -17,26 +17,6 @@ class PagesListFilterSchema(FilterSchema):
     document_id: Optional[str] = None
 
 
-class BucketSchema(BaseModel):
-    sqid: str
-    name: str
-    description: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class BucketCreateSchema(BaseModel):
-    name: str = Field(..., min_length=1, max_length=100)
-    description: Optional[str] = None
-
-
-class BucketUpdateSchema(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=100)
-    description: Optional[str] = None
-
 
 class PageSchema(ModelSchema):
     class Meta:
@@ -191,7 +171,7 @@ class SearchFilterSchema(FilterSchema):
     q: Optional[str] = None  # Handle search manually in the API function
     min_score: Optional[float] = Field(default=0.001, ge=0.0, le=1.0)
     document_title: Annotated[Optional[str], FilterLookup("document__title__icontains")] = None
-    bucket_name: Annotated[Optional[str], FilterLookup("document__group__name__icontains")] = None
+    group_name: Annotated[Optional[str], FilterLookup("document__group__name__icontains")] = None
 
     def custom_expression(self) -> Q:
         """Custom filtering logic for the search schema"""
@@ -201,9 +181,9 @@ class SearchFilterSchema(FilterSchema):
         if self.document_title:
             q &= Q(document__title__icontains=self.document_title)
 
-        # Handle bucket name filtering
-        if self.bucket_name:
-            q &= Q(document__group__name__icontains=self.bucket_name)
+        # Handle group name filtering
+        if self.group_name:
+            q &= Q(document__group__name__icontains=self.group_name)
 
         # Note: q (search query) and min_score are handled in the API function
         return q

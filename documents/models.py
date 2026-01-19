@@ -8,18 +8,18 @@ from pagewise.models import BaseModel
 
 
 def document_upload_path(instance, filename):
-    """Generate upload path for documents: /{bucket_name}/{document_title}/"""
-    bucket_name = instance.group.name
+    """Generate upload path for documents: /{group_name}/{document_title}/"""
+    group_name = instance.group.name
     # Clean filename for filesystem
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{bucket_name}/{clean_title}/{clean_title}.pdf"
+    return f"{group_name}/{clean_title}/{clean_title}.pdf"
 
 
 def thumbnail_upload_path(instance, filename):
     """Generate upload path for thumbnails"""
-    bucket_name = instance.group.name
+    group_name = instance.group.name
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{bucket_name}/{clean_title}/{clean_title}-cover.jpg"
+    return f"{group_name}/{clean_title}/{clean_title}-cover.jpg"
 
 
 class ProcessingStatus(models.TextChoices):
@@ -30,7 +30,7 @@ class ProcessingStatus(models.TextChoices):
 
 
 class Document(BaseModel):
-    group = models.ForeignKey('bucket.Bucket', on_delete=models.CASCADE, related_name="documents")
+    group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name="documents")
 
     title = models.CharField(max_length=500)
     thumbnail = models.FileField(
@@ -64,9 +64,9 @@ class Document(BaseModel):
 
 def page_upload_path(instance, filename):
     """Generate upload path for individual pages"""
-    bucket_name = instance.document.group.name
+    group_name = instance.document.group.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{bucket_name}/{clean_title}/pages/{instance.page_number}.pdf"
+    return f"{group_name}/{clean_title}/pages/{instance.page_number}.pdf"
 
 
 class Page(BaseModel):
@@ -103,9 +103,9 @@ class Page(BaseModel):
 
 def image_upload_path(instance, filename):
     """Generate upload path for extracted images"""
-    bucket_name = instance.page.document.group.name
+    group_name = instance.page.document.group.name
     clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{bucket_name}/{clean_title}/images/{instance.page.page_number}_{filename}"
+    return f"{group_name}/{clean_title}/images/{instance.page.page_number}_{filename}"
 
 
 class Image(BaseModel):

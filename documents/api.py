@@ -15,7 +15,7 @@ from documents.schemas import (
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
 from documents.tasks import process_document
-from bucket.models import Bucket
+from groups.models import Group
 
 router = Router()
 
@@ -32,10 +32,10 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 @router.post("/documents/", response=DocumentSchema)
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
-    bucket = get_object_or_404(Bucket, sqid=payload.group_sqid)
+    group = get_object_or_404(Group, sqid=payload.group_sqid)
     document = Document.objects.create(
         title=payload.title,
-        group=bucket,
+        group=group,
         metadata=payload.metadata
     )
     return document
@@ -55,8 +55,8 @@ def upload_document(
     if not file.name.lower().endswith('.pdf'):
         return {"error": "Only PDF files are allowed"}, 400
 
-    # Get bucket
-    bucket = get_object_or_404(Bucket, sqid=group_sqid)
+    # Get group
+    group = get_object_or_404(Group, sqid=group_sqid)
 
     # Parse metadata
     try:
@@ -67,7 +67,7 @@ def upload_document(
     # Create document
     document = Document.objects.create(
         title=title,
-        group=bucket,
+        group=group,
         original_pdf=file,
         metadata=metadata_dict
     )
