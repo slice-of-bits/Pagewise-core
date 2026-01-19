@@ -265,27 +265,52 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
     )
 
 # Docling Settings endpoints (Legacy - deprecated)
-@router.get("/settings/docling/", response=DoclingSettingsSchema)
+@router.get("/settings/docling/")
 def get_docling_settings(request):
-    """DEPRECATED: Get current Docling settings. Use /settings/ocr/ instead."""
-    from django.http import HttpResponse
-    response = HttpResponse()
-    response['Deprecation'] = 'true'
-    response['Sunset'] = 'Sat, 01 Jan 2027 00:00:00 GMT'
-    response['Link'] = '</api/settings/ocr/>; rel="alternate"'
+    """DEPRECATED: Get current Docling settings. Use /api/settings/ocr/ instead.
+    
+    This endpoint will be removed in v2.0.
+    Migrate to: GET /api/settings/ocr/default/
+    """
+    from django.http import JsonResponse
     
     settings = DoclingSettings.get_default_settings()
-    return settings
-
-
-@router.put("/settings/docling/", response=DoclingSettingsSchema)
-def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
-    """DEPRECATED: Update Docling settings. Use /settings/ocr/ instead."""
-    from django.http import HttpResponse
-    response = HttpResponse()
+    
+    # Return with deprecation warning in response body
+    response_data = {
+        "deprecated": True,
+        "deprecation_message": "This endpoint is deprecated. Use /api/settings/ocr/default/ instead.",
+        "sunset_date": "2027-01-01",
+        "data": {
+            "sqid": settings.sqid,
+            "name": settings.name,
+            "ocr_engine": settings.ocr_engine,
+            "detect_tables": settings.detect_tables,
+            "detect_figures": settings.detect_figures,
+            "ignore_headers_footers": settings.ignore_headers_footers,
+            "language": settings.language,
+            "confidence_threshold": settings.confidence_threshold,
+            "settings_json": settings.settings_json,
+            "created_at": settings.created_at.isoformat(),
+            "updated_at": settings.updated_at.isoformat(),
+        }
+    }
+    
+    response = JsonResponse(response_data)
     response['Deprecation'] = 'true'
     response['Sunset'] = 'Sat, 01 Jan 2027 00:00:00 GMT'
-    response['Link'] = '</api/settings/ocr/>; rel="alternate"'
+    response['Link'] = '</api/settings/ocr/default/>; rel="alternate"'
+    return response
+
+
+@router.put("/settings/docling/")
+def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
+    """DEPRECATED: Update Docling settings. Use /api/settings/ocr/default/ instead.
+    
+    This endpoint will be removed in v2.0.
+    Migrate to: PUT /api/settings/ocr/default/
+    """
+    from django.http import JsonResponse
     
     settings = DoclingSettings.get_default_settings()
 
@@ -293,7 +318,32 @@ def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
         setattr(settings, attr, value)
 
     settings.save()
-    return settings
+    
+    # Return with deprecation warning in response body
+    response_data = {
+        "deprecated": True,
+        "deprecation_message": "This endpoint is deprecated. Use /api/settings/ocr/default/ instead.",
+        "sunset_date": "2027-01-01",
+        "data": {
+            "sqid": settings.sqid,
+            "name": settings.name,
+            "ocr_engine": settings.ocr_engine,
+            "detect_tables": settings.detect_tables,
+            "detect_figures": settings.detect_figures,
+            "ignore_headers_footers": settings.ignore_headers_footers,
+            "language": settings.language,
+            "confidence_threshold": settings.confidence_threshold,
+            "settings_json": settings.settings_json,
+            "created_at": settings.created_at.isoformat(),
+            "updated_at": settings.updated_at.isoformat(),
+        }
+    }
+    
+    response = JsonResponse(response_data)
+    response['Deprecation'] = 'true'
+    response['Sunset'] = 'Sat, 01 Jan 2027 00:00:00 GMT'
+    response['Link'] = '</api/settings/ocr/default/>; rel="alternate"'
+    return response
 
 
 # OCR Settings endpoints

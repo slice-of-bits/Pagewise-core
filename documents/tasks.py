@@ -38,13 +38,13 @@ def process_document(self, document_id: int):
         # Get OCR settings for this document
         ocr_settings = document.get_ocr_settings()
 
-        # Step 1: Apply OCRmyPDF if enabled
+        # Step 1: Apply OCRmyPDF if enabled (synchronous to ensure completion)
         if ocr_settings.use_ocrmypdf and not document.ocrmypdf_applied:
             logger.info(f"Applying OCRmyPDF to document: {document.title}")
-            apply_ocrmypdf.delay(document_id)
-            # Wait for OCRmyPDF to complete before continuing
-            # Note: In a real implementation, you might want to chain tasks
-            # For now, we'll let it run asynchronously
+            # Call OCRmyPDF synchronously to ensure it completes before continuing
+            apply_ocrmypdf(document_id)
+            # Reload document to get updated ocrmypdf_applied flag
+            document.refresh_from_db()
         
         # Generate thumbnail from first page of PDF
         # For S3 storage, we need to handle file access differently
@@ -363,17 +363,19 @@ def process_page(page_id: int):
         try:
             logger.info(f"Processing page {page.page_number} of document {page.document.title}")
             
-            # Convert PDF to image
+            # Convert PDF to image and validate page count first
             pdf_doc = fitz.open(pdf_path)
             
-            # Verify PDF has exactly one page
-            if len(pdf_doc) != 1:
-                logger.error(f"Page PDF should have exactly 1 page, found {len(pdf_doc)}")
+            # Verify PDF has exactly one page before processing
+            page_count = len(pdf_doc)
+            if page_count != 1:
+                logger.error(f"Page PDF should have exactly 1 page, found {page_count}")
                 pdf_doc.close()
                 page.processing_status = ProcessingStatus.FAILED
                 page.save()
                 return
             
+            # Now that we've validated, process the page
             first_page = pdf_doc[0]
             mat = fitz.Matrix(2, 2)  # 2x zoom for better quality
             pix = first_page.get_pixmap(matrix=mat)
