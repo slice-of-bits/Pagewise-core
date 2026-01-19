@@ -1,17 +1,18 @@
 # Pagewise Core - Document Management Backend
 
-A comprehensive document management backend for scanned books with page-level search capabilities. Built with Django, designed to handle PDF documents with 100+ pages, extract text using Docling, and provide advanced search functionality at the page level.
+A comprehensive document management backend for scanned books with page-level search capabilities. Built with Django, designed to handle PDF documents with 100+ pages, extract text using PaddleOCR-VL via Ollama, and provide advanced search functionality at the page level.
 
 ## Features
 
 - **Document Management**: Upload and manage PDF documents organized in buckets
 - **Page-Level Processing**: Each page is stored as a separate model for granular search
 - **Background Processing**: Celery-powered asynchronous document processing
-- **OCR & Text Extraction**: Uses Docling for advanced document understanding
+- **OCR & Text Extraction**: Uses PaddleOCR-VL via Ollama for advanced document understanding
+- **OCRmyPDF Integration**: Optional OCRmyPDF processing to add selectable text layer to PDFs
 - **Thumbnail Generation**: Automatic thumbnail generation from first page
 - **Progress Tracking**: Real-time processing progress monitoring
-- **Configurable Processing**: User-configurable Docling settings
-- **Image Extraction**: Extract and store images from document pages
+- **Configurable Processing**: Per-document and global OCR settings
+- **Image Extraction**: Extract and store images from document pages in S3
 - **Advanced Search**: Full-text search with bucket and document filtering
 - **REST API**: Django Ninja-powered API for all operations
 
@@ -29,11 +30,13 @@ A comprehensive document management backend for scanned books with page-level se
                        │  (Background)    │    │  (Message Broker)│
                        └──────────────────┘    └─────────────────┘
                                 │
-                                ▼
-                       ┌──────────────────┐
-                       │     Docling      │
-                       │ (Text Extraction)│
-                       └──────────────────┘
+                    ┌───────────┴───────────┐
+                    ▼                       ▼
+           ┌─────────────────┐    ┌─────────────────┐
+           │    OCRmyPDF     │    │ Ollama Server   │
+           │ (Optional PDF   │    │ (PaddleOCR-VL)  │
+           │  Text Layer)    │    │                 │
+           └─────────────────┘    └─────────────────┘
 ```
 
 ## File Organization
@@ -153,20 +156,60 @@ Currently uses Django's built-in session authentication. Token authentication ca
   }
   ```
 
-#### Settings
+#### OCR Settings
 
-- `GET /api/settings/` - Get current Docling settings
-- `PUT /api/settings/` - Update Docling settings
+- `GET /api/settings/ocr/` - List all OCR settings
+- `GET /api/settings/ocr/default/` - Get default OCR settings
+- `GET /api/settings/ocr/{sqid}` - Get specific OCR settings
+- `POST /api/settings/ocr/` - Create new OCR settings
+- `PUT /api/settings/ocr/{sqid}` - Update OCR settings
+- `PUT /api/settings/ocr/default/` - Update default OCR settings
+- `DELETE /api/settings/ocr/{sqid}` - Delete OCR settings (cannot delete default)
+
+#### Images
+
+- `GET /api/images/{sqid}/view` - View image (redirects to S3 URL, allows auth layer)
+
+#### Legacy Endpoints (Deprecated)
+
+- `GET /api/settings/docling/` - Get current Docling settings (deprecated)
+- `PUT /api/settings/docling/` - Update Docling settings (deprecated)
 
 ### Example Usage
 
 #### Upload a Document
+
 ```bash
+# Upload with default OCR settings
 curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
   -F "group_sqid=bucket_sqid_here" \
   -F "metadata={\"author\": \"John Doe\"}"
+
+# Upload with custom OCR settings
+curl -X POST "http://localhost:8000/api/documents/upload/" \
+  -F "file=@document.pdf" \
+  -F "title=My Document" \
+  -F "group_sqid=bucket_sqid_here" \
+  -F "ocr_settings_sqid=custom_settings_sqid" \
+  -F "metadata={\"author\": \"John Doe\"}"
+```
+
+#### Create Custom OCR Settings
+
+```bash
+curl -X POST "http://localhost:8000/api/settings/ocr/" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "high-quality-ocr",
+    "ollama_base_url": "http://localhost:11434",
+    "paddleocr_model": "paddleocr-vl",
+    "use_ocrmypdf": true,
+    "ocrmypdf_language": "eng",
+    "ocrmypdf_compression": true,
+    "language": "en"
+  }'
 ```
 
 #### Search Pages
@@ -185,27 +228,31 @@ curl -X POST "http://localhost:8000/api/search/" \
 Groups for organizing documents.
 
 ### Document
-Main document model with processing status tracking.
+Main document model with processing status tracking and per-document OCR settings.
 
 ### Page
-Individual pages with OCR text and layout data.
+Individual pages with OCR text and PaddleOCR-VL layout data.
 
 ### Image
-Images extracted from document pages.
+Images extracted from document pages, stored in S3.
 
-### DoclingSettings
-Configurable settings for document processing.
+### OcrSettings
+Configurable OCR settings for PaddleOCR-VL and OCRmyPDF. Can be set globally or per-document.
+
+### DoclingSettings (Deprecated)
+Legacy settings model for Docling. Kept for backward compatibility.
 
 ## Background Processing
 
 The system uses Celery for background processing with the following workflow:
 
 1. **Document Upload** → `process_document` task
-2. **PDF Analysis** → Extract page count
-3. **Thumbnail Generation** → First page as JPEG
-4. **Page Splitting** → Individual PDF pages
-5. **Page Processing** → OCR and layout analysis per page
-6. **Progress Updates** → Real-time status tracking
+2. **OCRmyPDF (Optional)** → Add selectable text layer to PDF with compression
+3. **PDF Analysis** → Extract page count
+4. **Thumbnail Generation** → First page as JPEG
+5. **Page Splitting** → Individual PDF pages
+6. **Page Processing** → OCR with PaddleOCR-VL via Ollama per page
+7. **Progress Updates** → Real-time status tracking
 
 ### Starting Celery Workers
 
@@ -224,13 +271,50 @@ celery -A pagewise worker --loglevel=info --concurrency=4
 - `DEBUG`: Debug mode (default: True)
 - `DATABASE_URL`: PostgreSQL connection string
 - `REDIS_URL`: Redis connection string (default: redis://localhost:6379/0)
+- `OLLAMA_BASE_URL`: Ollama server URL (default: http://localhost:11434)
+- `PADDLEOCR_MODEL`: PaddleOCR-VL model name (default: paddleocr-vl)
+- `USE_OCRMYPDF`: Enable OCRmyPDF processing (default: false)
+- `OCRMYPDF_LANGUAGE`: Language for OCRmyPDF (default: eng)
+- `OCRMYPDF_COMPRESSION`: Enable OCRmyPDF compression (default: true)
 
-### Docling Settings
+### Setting Up Ollama with PaddleOCR-VL
 
-Configurable through the admin interface or API:
+1. **Install Ollama**:
+   ```bash
+   curl https://ollama.ai/install.sh | sh
+   ```
 
-- **OCR Engine**: tesseract, easyocr, doctr
+2. **Pull PaddleOCR-VL model**:
+   ```bash
+   ollama pull paddleocr-vl
+   ```
+
+3. **Start Ollama server** (if not already running):
+   ```bash
+   ollama serve
+   ```
+
+4. **Configure Pagewise** to use Ollama:
+   - Set `OLLAMA_BASE_URL` in `.env` (default: http://localhost:11434)
+   - For remote Ollama servers, use the full URL: `http://your-server:11434`
+
+### OCR Settings
+
+OCR settings can be configured:
+- **Globally**: Through the admin interface or API (`/api/settings/ocr/default/`)
+- **Per-Document**: When uploading a document, specify `ocr_settings_sqid`
+
+Available settings:
+- **Ollama Base URL**: URL of the Ollama server hosting PaddleOCR-VL
+- **PaddleOCR Model**: Name of the model in Ollama (default: paddleocr-vl)
+- **Use OCRmyPDF**: Enable OCRmyPDF to add selectable text layer
+- **OCRmyPDF Language**: Language code for OCRmyPDF (eng, deu, fra, etc.)
+- **OCRmyPDF Compression**: Enable compression to reduce file size
 - **Language**: Document language for OCR
+
+### Legacy Docling Settings (Deprecated)
+
+These settings are maintained for backward compatibility but are no longer used:
 - **Layout Detection**: Tables, figures, headers/footers
 - **Output Format**: markdown, text, json
 - **Confidence Threshold**: OCR confidence level
