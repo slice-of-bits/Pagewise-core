@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 from django.db.models import Q
 
-from documents.models import Document, Page
+from documents.models import Document, Page, OcrSettings
 
 
 class DocumentListFilterSchema(FilterSchema):
@@ -81,6 +81,7 @@ class DocumentSchema(ModelSchema):
 class DocumentCreateSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     group_sqid: str
+    ocr_settings_sqid: Optional[str] = Field(None, description="OCR settings to use for this document. If not provided, uses global default.")
     metadata: Optional[dict] = {}
 
 
@@ -166,6 +167,44 @@ class DoclingSettingsUpdateSchema(BaseModel):
     ignore_headers_footers: Optional[bool] = None
     language: Optional[str] = Field(None, min_length=2, max_length=10)
     confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+    settings_json: Optional[dict] = None
+
+
+class OcrSettingsSchema(BaseModel):
+    sqid: str
+    name: str
+    ollama_base_url: str
+    paddleocr_model: str
+    use_ocrmypdf: bool
+    ocrmypdf_language: str
+    ocrmypdf_compression: bool
+    language: str
+    settings_json: dict
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class OcrSettingsCreateSchema(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    ollama_base_url: str = Field(default='http://localhost:11434', max_length=255)
+    paddleocr_model: str = Field(default='paddleocr-vl', max_length=100)
+    use_ocrmypdf: bool = Field(default=False)
+    ocrmypdf_language: str = Field(default='eng', max_length=10)
+    ocrmypdf_compression: bool = Field(default=True)
+    language: str = Field(default='en', min_length=2, max_length=10)
+    settings_json: Optional[dict] = {}
+
+
+class OcrSettingsUpdateSchema(BaseModel):
+    ollama_base_url: Optional[str] = Field(None, max_length=255)
+    paddleocr_model: Optional[str] = Field(None, max_length=100)
+    use_ocrmypdf: Optional[bool] = None
+    ocrmypdf_language: Optional[str] = Field(None, max_length=10)
+    ocrmypdf_compression: Optional[bool] = None
+    language: Optional[str] = Field(None, min_length=2, max_length=10)
     settings_json: Optional[dict] = None
 
 

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Document, Page, Image, DoclingSettings
+from .models import Document, Page, Image, DoclingSettings, OcrSettings
 
 
 class PageInline(admin.TabularInline):
@@ -17,8 +17,8 @@ class ImageInline(admin.TabularInline):
 
 @admin.register(Document)
 class DocumentAdmin(admin.ModelAdmin):
-    list_display = ['title', 'group', 'page_count', 'processing_status', 'processing_progress', 'created_at']
-    list_filter = ['processing_status', 'group', 'created_at']
+    list_display = ['title', 'group', 'page_count', 'processing_status', 'processing_progress', 'ocrmypdf_applied', 'created_at']
+    list_filter = ['processing_status', 'group', 'ocrmypdf_applied', 'created_at']
     search_fields = ['title', 'group__name']
     readonly_fields = ['sqid', 'processing_status', 'processed_pages', 'processing_progress', 'created_at', 'updated_at']
     inlines = [PageInline]
@@ -26,6 +26,9 @@ class DocumentAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {
             'fields': ('title', 'group', 'original_pdf', 'thumbnail')
+        }),
+        ('OCR Settings', {
+            'fields': ('ocr_settings', 'ocrmypdf_applied')
         }),
         ('Processing', {
             'fields': ('page_count', 'processing_status', 'processed_pages', 'processing_progress'),
@@ -55,7 +58,7 @@ class PageAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Advanced', {
-            'fields': ('docling_layout', 'metadata'),
+            'fields': ('paddleocr_layout', 'metadata'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -97,6 +100,41 @@ class DoclingSettingsAdmin(admin.ModelAdmin):
         }),
         ('Layout Detection', {
             'fields': ('detect_tables', 'detect_figures', 'ignore_headers_footers')
+        }),
+        ('Advanced', {
+            'fields': ('settings_json',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('sqid', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+
+    def has_delete_permission(self, request, obj=None):
+        # Prevent deletion of default settings
+        if obj and obj.name == 'default':
+            return False
+        return super().has_delete_permission(request, obj)
+
+
+@admin.register(OcrSettings)
+class OcrSettingsAdmin(admin.ModelAdmin):
+    list_display = ['name', 'paddleocr_model', 'use_ocrmypdf', 'language', 'updated_at']
+    readonly_fields = ['sqid', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (None, {
+            'fields': ('name',)
+        }),
+        ('Ollama Configuration', {
+            'fields': ('ollama_base_url', 'paddleocr_model')
+        }),
+        ('OCRmyPDF Settings', {
+            'fields': ('use_ocrmypdf', 'ocrmypdf_language', 'ocrmypdf_compression')
+        }),
+        ('General Settings', {
+            'fields': ('language',)
         }),
         ('Advanced', {
             'fields': ('settings_json',),

@@ -50,6 +50,22 @@ class Document(BaseModel):
     )
     processed_pages = models.PositiveIntegerField(default=0)
 
+    # Per-document OCR settings
+    ocr_settings = models.ForeignKey(
+        'OcrSettings',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+        help_text='OCR settings for this document. If null, uses global default settings.'
+    )
+    
+    # OCRmyPDF tracking
+    ocrmypdf_applied = models.BooleanField(
+        default=False,
+        help_text='Whether OCRmyPDF has been applied to add selectable text to the PDF'
+    )
+
     metadata = models.JSONField(default=dict, blank=True)
 
     def __str__(self):
@@ -61,6 +77,12 @@ class Document(BaseModel):
         if self.page_count == 0:
             return 0
         return (self.processed_pages / self.page_count) * 100
+    
+    def get_ocr_settings(self):
+        """Get OCR settings for this document (per-document or global default)"""
+        if self.ocr_settings:
+            return self.ocr_settings
+        return OcrSettings.get_default_settings()
 
 def page_upload_path(instance, filename):
     """Generate upload path for individual pages"""
@@ -84,8 +106,8 @@ class Page(BaseModel):
         default=ProcessingStatus.PENDING
     )
 
-    # Docling data
-    docling_layout = models.JSONField(blank=True, null=True)
+    # PaddleOCR-VL data
+    paddleocr_layout = models.JSONField(blank=True, null=True)
 
     # search
     # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
@@ -120,8 +142,73 @@ class Image(BaseModel):
         return f"Image from {self.page}"
 
 
+class OcrSettings(BaseModel):
+    """OCR settings model for PaddleOCR-VL and OCRmyPDF configuration"""
+
+    name = models.CharField(max_length=100, default="default", unique=True)
+
+    # Ollama Server Configuration
+    ollama_base_url = models.CharField(
+        max_length=255,
+        default='http://localhost:11434',
+        help_text='Ollama server URL for hosting PaddleOCR-VL'
+    )
+    
+    # PaddleOCR-VL Model Settings
+    paddleocr_model = models.CharField(
+        max_length=100,
+        default='paddleocr-vl',
+        help_text='Name of the PaddleOCR-VL model in Ollama'
+    )
+
+    # OCRmyPDF Settings
+    use_ocrmypdf = models.BooleanField(
+        default=False,
+        help_text='Apply OCRmyPDF to add selectable text to PDF'
+    )
+    ocrmypdf_language = models.CharField(
+        max_length=10,
+        default='eng',
+        help_text='Language for OCRmyPDF (e.g., eng, deu, fra)'
+    )
+    ocrmypdf_compression = models.BooleanField(
+        default=True,
+        help_text='Enable compression in OCRmyPDF to reduce file size'
+    )
+
+    # Processing settings
+    language = models.CharField(max_length=10, default='en')
+    
+    # Advanced settings JSON for additional configuration
+    settings_json = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        verbose_name = "OCR Settings"
+        verbose_name_plural = "OCR Settings"
+
+    def __str__(self):
+        return f"OCR Settings: {self.name}"
+
+    @classmethod
+    def get_default_settings(cls):
+        """Get or create default settings"""
+        settings, _ = cls.objects.get_or_create(
+            name='default',
+            defaults={
+                'ollama_base_url': 'http://localhost:11434',
+                'paddleocr_model': 'paddleocr-vl',
+                'use_ocrmypdf': False,
+                'ocrmypdf_language': 'eng',
+                'ocrmypdf_compression': True,
+                'language': 'en',
+            }
+        )
+        return settings
+
+
+# Keep DoclingSettings for backward compatibility during migration
 class DoclingSettings(BaseModel):
-    """Singleton model for Docling configuration"""
+    """DEPRECATED: Legacy model for Docling configuration - use OcrSettings instead"""
 
     name = models.CharField(max_length=100, default="default", unique=True)
 
@@ -149,8 +236,8 @@ class DoclingSettings(BaseModel):
     settings_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        verbose_name = "Docling Settings"
-        verbose_name_plural = "Docling Settings"
+        verbose_name = "Docling Settings (Legacy)"
+        verbose_name_plural = "Docling Settings (Legacy)"
 
     def __str__(self):
         return f"Docling Settings: {self.name}"

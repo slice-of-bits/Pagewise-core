@@ -6,11 +6,12 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Value
 from collections import defaultdict
 
-from documents.models import Document, Page, Image, DoclingSettings
+from documents.models import Document, Page, Image, DoclingSettings, OcrSettings
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,
     PageSchema, PageUpdateSchema, ImageSchema,
     DoclingSettingsSchema, DoclingSettingsUpdateSchema,
+    OcrSettingsSchema, OcrSettingsCreateSchema, OcrSettingsUpdateSchema,
     SearchResultSchema, SearchDocumentSchema, SearchPageSchema, DocumentListFilterSchema,
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
@@ -33,9 +34,16 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
     bucket = get_object_or_404(Bucket, sqid=payload.group_sqid)
+    
+    # Get OCR settings if provided
+    ocr_settings = None
+    if payload.ocr_settings_sqid:
+        ocr_settings = get_object_or_404(OcrSettings, sqid=payload.ocr_settings_sqid)
+    
     document = Document.objects.create(
         title=payload.title,
         group=bucket,
+        ocr_settings=ocr_settings,
         metadata=payload.metadata
     )
     return document
@@ -46,6 +54,7 @@ def upload_document(
     file: UploadedFile = File(...),
     title: str = Form(...),
     group_sqid: str = Form(...),
+    ocr_settings_sqid: str = Form(None),
     metadata: str = Form('{}')
 ):
     """Upload a PDF document and start processing"""
@@ -58,6 +67,11 @@ def upload_document(
     # Get bucket
     bucket = get_object_or_404(Bucket, sqid=group_sqid)
 
+    # Get OCR settings if provided
+    ocr_settings = None
+    if ocr_settings_sqid:
+        ocr_settings = get_object_or_404(OcrSettings, sqid=ocr_settings_sqid)
+
     # Parse metadata
     try:
         metadata_dict = json.loads(metadata) if metadata else {}
@@ -69,6 +83,7 @@ def upload_document(
         title=title,
         group=bucket,
         original_pdf=file,
+        ocr_settings=ocr_settings,
         metadata=metadata_dict
     )
 
@@ -249,17 +264,17 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         total_results=queryset.count()
     )
 
-# Docling Settings endpoints
-@router.get("/settings/", response=DoclingSettingsSchema)
+# Docling Settings endpoints (Legacy - deprecated)
+@router.get("/settings/docling/", response=DoclingSettingsSchema)
 def get_docling_settings(request):
-    """Get current Docling settings"""
+    """DEPRECATED: Get current Docling settings. Use /settings/ocr/ instead."""
     settings = DoclingSettings.get_default_settings()
     return settings
 
 
-@router.put("/settings/", response=DoclingSettingsSchema)
+@router.put("/settings/docling/", response=DoclingSettingsSchema)
 def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
-    """Update Docling settings"""
+    """DEPRECATED: Update Docling settings. Use /settings/ocr/ instead."""
     settings = DoclingSettings.get_default_settings()
 
     for attr, value in payload.model_dump(exclude_unset=True).items():
@@ -267,6 +282,85 @@ def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
 
     settings.save()
     return settings
+
+
+# OCR Settings endpoints
+@router.get("/settings/ocr/", response=List[OcrSettingsSchema])
+def list_ocr_settings(request):
+    """List all OCR settings"""
+    return OcrSettings.objects.all()
+
+
+@router.get("/settings/ocr/default/", response=OcrSettingsSchema)
+def get_default_ocr_settings(request):
+    """Get default OCR settings"""
+    settings = OcrSettings.get_default_settings()
+    return settings
+
+
+@router.get("/settings/ocr/{sqid}", response=OcrSettingsSchema)
+def get_ocr_settings(request, sqid: str):
+    """Get specific OCR settings by sqid"""
+    return get_object_or_404(OcrSettings, sqid=sqid)
+
+
+@router.post("/settings/ocr/", response=OcrSettingsSchema)
+def create_ocr_settings(request, payload: OcrSettingsCreateSchema):
+    """Create new OCR settings"""
+    settings = OcrSettings.objects.create(**payload.model_dump())
+    return settings
+
+
+@router.put("/settings/ocr/{sqid}", response=OcrSettingsSchema)
+def update_ocr_settings(request, sqid: str, payload: OcrSettingsUpdateSchema):
+    """Update OCR settings"""
+    settings = get_object_or_404(OcrSettings, sqid=sqid)
+
+    for attr, value in payload.model_dump(exclude_unset=True).items():
+        setattr(settings, attr, value)
+
+    settings.save()
+    return settings
+
+
+@router.put("/settings/ocr/default/", response=OcrSettingsSchema)
+def update_default_ocr_settings(request, payload: OcrSettingsUpdateSchema):
+    """Update default OCR settings"""
+    settings = OcrSettings.get_default_settings()
+
+    for attr, value in payload.model_dump(exclude_unset=True).items():
+        setattr(settings, attr, value)
+
+    settings.save()
+    return settings
+
+
+@router.delete("/settings/ocr/{sqid}")
+def delete_ocr_settings(request, sqid: str):
+    """Delete OCR settings (cannot delete default)"""
+    settings = get_object_or_404(OcrSettings, sqid=sqid)
+    
+    if settings.name == 'default':
+        return {"error": "Cannot delete default settings"}, 400
+    
+    settings.delete()
+    return {"success": True}
+
+
+# Image redirect view for authentication
+@router.get("/images/{sqid}/view")
+def view_image(request, sqid: str):
+    """Redirect to S3 URL for image - allows for authentication layer"""
+    from django.http import HttpResponseRedirect
+    
+    image = get_object_or_404(Image, sqid=sqid)
+    
+    # TODO: Add authentication check here if needed
+    # if not request.user.is_authenticated:
+    #     return {"error": "Authentication required"}, 401
+    
+    # Redirect to S3 URL
+    return HttpResponseRedirect(image.image_file.url)
 
 
 def create_snippet(text: str, query: str, max_length: int = 300) -> str:
