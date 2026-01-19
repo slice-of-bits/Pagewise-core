@@ -268,6 +268,12 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
 @router.get("/settings/docling/", response=DoclingSettingsSchema)
 def get_docling_settings(request):
     """DEPRECATED: Get current Docling settings. Use /settings/ocr/ instead."""
+    from django.http import HttpResponse
+    response = HttpResponse()
+    response['Deprecation'] = 'true'
+    response['Sunset'] = 'Sat, 01 Jan 2027 00:00:00 GMT'
+    response['Link'] = '</api/settings/ocr/>; rel="alternate"'
+    
     settings = DoclingSettings.get_default_settings()
     return settings
 
@@ -275,6 +281,12 @@ def get_docling_settings(request):
 @router.put("/settings/docling/", response=DoclingSettingsSchema)
 def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
     """DEPRECATED: Update Docling settings. Use /settings/ocr/ instead."""
+    from django.http import HttpResponse
+    response = HttpResponse()
+    response['Deprecation'] = 'true'
+    response['Sunset'] = 'Sat, 01 Jan 2027 00:00:00 GMT'
+    response['Link'] = '</api/settings/ocr/>; rel="alternate"'
+    
     settings = DoclingSettings.get_default_settings()
 
     for attr, value in payload.model_dump(exclude_unset=True).items():
@@ -338,10 +350,15 @@ def update_default_ocr_settings(request, payload: OcrSettingsUpdateSchema):
 @router.delete("/settings/ocr/{sqid}")
 def delete_ocr_settings(request, sqid: str):
     """Delete OCR settings (cannot delete default)"""
+    from django.http import JsonResponse
+    
     settings = get_object_or_404(OcrSettings, sqid=sqid)
     
     if settings.name == 'default':
-        return {"error": "Cannot delete default settings"}, 400
+        return JsonResponse(
+            {"error": "Cannot delete default settings"},
+            status=403  # Forbidden - business rule violation
+        )
     
     settings.delete()
     return {"success": True}

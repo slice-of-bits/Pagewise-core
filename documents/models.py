@@ -207,6 +207,10 @@ class OcrSettings(BaseModel):
 
 
 # Keep DoclingSettings for backward compatibility during migration
+# DEPRECATED: This model is maintained for backward compatibility only.
+# New implementations should use OcrSettings instead.
+# Migration path: Create equivalent OcrSettings and update Document.ocr_settings references.
+# This model may be removed in a future major version (v2.0+).
 class DoclingSettings(BaseModel):
     """DEPRECATED: Legacy model for Docling configuration - use OcrSettings instead"""
 

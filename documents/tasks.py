@@ -3,6 +3,7 @@ import logging
 import tempfile
 import time
 import json
+import base64
 
 from celery import shared_task
 from django.core.files.base import ContentFile
@@ -364,6 +365,15 @@ def process_page(page_id: int):
             
             # Convert PDF to image
             pdf_doc = fitz.open(pdf_path)
+            
+            # Verify PDF has exactly one page
+            if len(pdf_doc) != 1:
+                logger.error(f"Page PDF should have exactly 1 page, found {len(pdf_doc)}")
+                pdf_doc.close()
+                page.processing_status = ProcessingStatus.FAILED
+                page.save()
+                return
+            
             first_page = pdf_doc[0]
             mat = fitz.Matrix(2, 2)  # 2x zoom for better quality
             pix = first_page.get_pixmap(matrix=mat)
@@ -380,7 +390,6 @@ def process_page(page_id: int):
                 
                 # Read image as base64
                 with open(image_path, 'rb') as img_file:
-                    import base64
                     image_data = base64.b64encode(img_file.read()).decode('utf-8')
                 
                 # Call Ollama with PaddleOCR-VL model
@@ -390,8 +399,14 @@ def process_page(page_id: int):
                     images=[image_data],
                 )
                 
-                # Extract markdown from response
-                page.ocr_markdown_raw = response.get('response', '')
+                # Extract markdown from response - validate response structure
+                if not isinstance(response, dict) or 'response' not in response:
+                    logger.error(f"Invalid response from Ollama for page {page.id}: {response}")
+                    page.processing_status = ProcessingStatus.FAILED
+                    page.save()
+                    return
+                
+                page.ocr_markdown_raw = response['response']
                 
                 # Store any layout information if available
                 page.paddleocr_layout = {
