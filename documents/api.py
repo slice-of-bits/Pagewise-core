@@ -16,7 +16,7 @@ from documents.schemas import (
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
 from documents.tasks import process_document
-from bucket.models import Bucket
+from groups.models import Group
 
 router = Router()
 
@@ -24,7 +24,7 @@ router = Router()
 @router.get("/documents/", response=List[DocumentSchema])
 @paginate
 def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
-    """Get all documents, optionally filtered by bucket"""
+    """Get all documents, optionally filtered by group"""
     queryset = Document.objects.select_related('group').all()
     queryset = filters.filter(queryset)
     return queryset
@@ -33,7 +33,7 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 @router.post("/documents/", response=DocumentSchema)
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
-    bucket = get_object_or_404(Bucket, sqid=payload.group_sqid)
+    group = get_object_or_404(Group, sqid=payload.group_sqid)
     
     # Get OCR settings if provided
     ocr_settings = None
@@ -42,7 +42,7 @@ def create_document(request, payload: DocumentCreateSchema):
     
     document = Document.objects.create(
         title=payload.title,
-        group=bucket,
+        group=group,
         ocr_settings=ocr_settings,
         metadata=payload.metadata
     )
@@ -64,8 +64,8 @@ def upload_document(
     if not file.name.lower().endswith('.pdf'):
         return {"error": "Only PDF files are allowed"}, 400
 
-    # Get bucket
-    bucket = get_object_or_404(Bucket, sqid=group_sqid)
+    # Get group
+    group = get_object_or_404(Group, sqid=group_sqid)
 
     # Get OCR settings if provided
     ocr_settings = None
@@ -81,7 +81,7 @@ def upload_document(
     # Create document
     document = Document.objects.create(
         title=title,
-        group=bucket,
+        group=group,
         original_pdf=file,
         ocr_settings=ocr_settings,
         metadata=metadata_dict

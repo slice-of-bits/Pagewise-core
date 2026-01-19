@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'storages',  # For S3/MinIO storage
 
-    'bucket',
+    'groups',
     'documents',
 ]
 
