@@ -119,8 +119,3 @@ class OCRSettingsAdmin(admin.ModelAdmin):
             return False
         return super().has_delete_permission(request, obj)
 
-
-# Keep alias for backward compatibility
-DoclingSettings = OCRSettings
-admin.site.register(OCRSettings)
-

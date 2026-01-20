@@ -366,7 +366,6 @@ def process_page(page_id: int):
         page.save()
 
 
-@shared_task
 def extract_images_from_ocr_result(page: Page, extracted_images: list, output_dir: str):
     """Extract images from OCR result and save them to the database"""
     try:
