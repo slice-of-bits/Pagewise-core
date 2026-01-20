@@ -96,7 +96,7 @@ class Page(BaseModel):
 
     # DeepSeek OCR data
     ocr_references = models.JSONField(blank=True, null=True)  # Store parsed references
-    bbox_visualization = models.FileField(upload_to=bbox_visualization_upload_path, blank=True, null=True)  # Bbox debug image
+    bbox_visualization = models.ImageField(upload_to=bbox_visualization_upload_path, blank=True, null=True)  # Bbox debug image
 
     # search
     # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
@@ -122,7 +122,7 @@ def image_upload_path(instance, filename):
 class Image(BaseModel):
     page = models.ForeignKey(Page, on_delete=models.CASCADE, related_name="images")
 
-    image_file = models.FileField(upload_to=image_upload_path)
+    image_file = models.ImageField(upload_to=image_upload_path, height_field="height", width_field="width")
     caption = models.TextField(blank=True, null=True)
     
     # Image dimensions
@@ -133,6 +133,17 @@ class Image(BaseModel):
 
     def __str__(self):
         return f"Image from {self.page}"
+
+    def clean(self):
+        """Validate that image file is not empty"""
+        from django.core.exceptions import ValidationError
+        if not self.image_file:
+            raise ValidationError("Image must have a file attached")
+
+    def save(self, *args, **kwargs):
+        """Override save to ensure validation"""
+        self.full_clean()
+        super().save(*args, **kwargs)
 
 
 class DeepSeekOCRSettings(BaseModel):

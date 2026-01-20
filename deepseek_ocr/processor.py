@@ -3,7 +3,7 @@ Main processor for DeepSeek OCR.
 """
 import json
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional, Callable
 
 from .client import run_ollama_ocr
 from .parser import parse_ocr_output
@@ -15,7 +15,8 @@ def process_image_with_ollama(
     output_dir: str = "output",
     prompt: str = "<|grounding|>Convert the document to markdown.",
     model: str = "deepseek-ocr",
-    host: str = None
+    host: str = None,
+    image_url_generator: Optional[Callable[[int, Dict], str]] = None
 ) -> Dict:
     """
     Complete pipeline: run OCR, parse output, extract images, save data.
@@ -26,7 +27,9 @@ def process_image_with_ollama(
         prompt: Prompt to send to the model
         model: The model name to use (default: deepseek-ocr)
         host: Ollama host URL (if None, uses OLLAMA_HOST env var or default)
-        
+        image_url_generator: Optional callback function that takes (image_index, reference_dict)
+                           and returns the URL/path to use in markdown
+
     Returns:
         Dictionary with references, markdown, and raw output
     """
@@ -42,8 +45,8 @@ def process_image_with_ollama(
         f.write(ocr_output)
     
     # Step 2: Parse the output
-    references, markdown = parse_ocr_output(ocr_output)
-    
+    references, markdown = parse_ocr_output(ocr_output, image_url_generator)
+
     # Step 3: Extract images based on bounding boxes
     extracted_images = extract_images_from_bounding_boxes(image_path, references, output_dir)
     

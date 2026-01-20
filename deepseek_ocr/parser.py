@@ -2,7 +2,7 @@
 Parser for DeepSeek OCR output.
 """
 import re
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Callable
 
 
 def parse_bounding_box(bbox_str: str) -> List[int]:
@@ -20,19 +20,25 @@ def parse_bounding_box(bbox_str: str) -> List[int]:
     return [int(n) for n in numbers]
 
 
-def parse_ocr_output(ocr_text: str) -> Tuple[List[Dict], str]:
+def parse_ocr_output(
+    ocr_text: str,
+    image_url_generator: Optional[Callable[[int, Dict], str]] = None
+) -> Tuple[List[Dict], str]:
     """
     Parse the OCR output to extract references with bounding boxes and generate markdown.
     
     Args:
         ocr_text: The raw OCR output from the model
-        
+        image_url_generator: Optional callback function that takes (image_index, reference_dict)
+                           and returns the URL/path to use in markdown. If None, uses default pattern.
+
     Returns:
         Tuple of (references list, markdown text)
     """
     references = []
     markdown_parts = []
-    
+    image_count = 0
+
     # Pattern to match: <|ref|>type<|/ref|><|det|>[[x1, y1, x2, y2]]<|/det|>
     # Followed by optional text content
     # Using lazy matching to capture content until the next <|ref|> tag or end
@@ -57,7 +63,14 @@ def parse_ocr_output(ocr_text: str) -> Tuple[List[Dict], str]:
         
         # Generate markdown based on type
         if ref_type == 'image':
-            markdown_parts.append(f"![Image](output/image_{len([r for r in references if r['type'] == 'image']) - 1}.png)\n")
+            # Use custom URL generator if provided, otherwise use default pattern
+            if image_url_generator:
+                image_url = image_url_generator(image_count, ref_data)
+            else:
+                image_url = f"output/image_{image_count}.png"
+
+            markdown_parts.append(f"![Image]({image_url})\n")
+            image_count += 1
         elif ref_type == 'sub_title':
             # check if the content start with ## then do nothing, else add proper markdown heading
             if not content.startswith('#'):

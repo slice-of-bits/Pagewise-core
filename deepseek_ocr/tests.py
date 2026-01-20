@@ -43,6 +43,29 @@ class TestParser(unittest.TestCase):
         self.assertIn('This is some text content.', markdown)
         self.assertIn('Section Title', markdown)
 
+    def test_parse_ocr_output_with_custom_image_url(self):
+        """Test parsing OCR output with custom image URL generator"""
+        ocr_text = """
+<|ref|>image<|/ref|><|det|>[[150, 200, 300, 400]]<|/det|>
+<|ref|>text<|/ref|><|det|>[[10, 20, 100, 50]]<|/det|>Some text.
+<|ref|>image<|/ref|><|det|>[[400, 500, 600, 700]]<|/det|>
+        """
+
+        # Custom URL generator that uses sqids
+        def custom_url_generator(image_index: int, ref_data: dict) -> str:
+            fake_sqids = ['abc123', 'def456', 'ghi789']
+            return fake_sqids[image_index]
+
+        references, markdown = parse_ocr_output(ocr_text, custom_url_generator)
+
+        # Check that we got 3 references
+        self.assertEqual(len(references), 3)
+
+        # Check markdown uses custom URLs
+        self.assertIn('![Image](abc123)', markdown)
+        self.assertIn('![Image](def456)', markdown)
+        self.assertNotIn('output/image_', markdown)
+
 
 class TestClient(unittest.TestCase):
     @patch('deepseek_ocr.client.ollama.Client')

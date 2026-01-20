@@ -77,6 +77,78 @@ result = process_image_with_ollama(
 # - extracted_images: List of extracted image info
 ```
 
+### `utils.py`
+Utility functions for working with image URLs and sqids.
+
+```python
+from deepseek_ocr.utils import (
+    regenerate_markdown_with_sqids,
+    create_sqid_image_url_generator,
+    create_placeholder_image_url_generator
+)
+
+# Generate markdown with placeholder URLs, then replace with sqids
+image_url_gen = create_placeholder_image_url_generator()
+references, markdown = parse_ocr_output(ocr_text, image_url_gen)
+
+# After saving images to database and getting their sqids
+sqids = ['abc123', 'def456', 'ghi789']
+final_markdown = regenerate_markdown_with_sqids(markdown, sqids)
+```
+
+## Working with Image URLs and SQID
+
+The package supports custom image URL generation through the `image_url_generator` parameter. This is particularly useful when integrating with database models that use unique identifiers (sqids).
+
+### Approach 1: Placeholder URLs (Recommended)
+
+Use placeholders during parsing, then replace with sqids after saving images:
+
+```python
+from deepseek_ocr import (
+    process_image_with_ollama,
+    create_placeholder_image_url_generator
+)
+
+# Parse with placeholders
+result = process_image_with_ollama(
+    image_path='image.png',
+    output_dir='output',
+    image_url_generator=create_placeholder_image_url_generator()
+)
+
+# Save images to database and collect sqids
+image_sqids = []
+for img_info in result['extracted_images']:
+    image_obj = Image.objects.create(...)
+    image_sqids.append(image_obj.sqid)
+
+# Replace placeholders with sqids
+from deepseek_ocr import regenerate_markdown_with_sqids
+final_markdown = regenerate_markdown_with_sqids(result['markdown'], image_sqids)
+```
+
+### Approach 2: Pre-determined SQIDs
+
+If you already have the sqids before parsing:
+
+```python
+from deepseek_ocr import parse_ocr_output, create_sqid_image_url_generator
+
+# Create URL generator with known sqids
+sqids = ['abc123', 'def456']
+url_generator = create_sqid_image_url_generator(sqids)
+
+# Parse with sqids directly
+references, markdown = parse_ocr_output(ocr_text, url_generator)
+```
+
+### Benefits of SQID Integration
+
+- **Unique References**: Each image gets a unique identifier that can be used to link back to the source
+- **Easy Lookup**: Frontend can easily fetch image metadata using the sqid from the markdown
+- **Consistent**: Works seamlessly with the rest of the application's sqid-based architecture
+
 ## Configuration
 
 The package uses the following environment variables:
