@@ -6,7 +6,7 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Value
 from collections import defaultdict
 
-from documents.models import Document, Page, Image, DoclingSettings
+from documents.models import Document, Page, Image, OCRSettings
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,
     PageSchema, PageUpdateSchema, ImageSchema,
@@ -36,6 +36,7 @@ def create_document(request, payload: DocumentCreateSchema):
     document = Document.objects.create(
         title=payload.title,
         group=group,
+        ocr_model=payload.ocr_model,
         metadata=payload.metadata
     )
     return document
@@ -46,6 +47,7 @@ def upload_document(
     file: UploadedFile = File(...),
     title: str = Form(...),
     group_sqid: str = Form(...),
+    ocr_model: str = Form('deepseek-ocr'),
     metadata: str = Form('{}')
 ):
     """Upload a PDF document and start processing"""
@@ -69,6 +71,7 @@ def upload_document(
         title=title,
         group=group,
         original_pdf=file,
+        ocr_model=ocr_model,
         metadata=metadata_dict
     )
 
@@ -249,18 +252,18 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         total_results=queryset.count()
     )
 
-# Docling Settings endpoints
+# OCR Settings endpoints
 @router.get("/settings/", response=DoclingSettingsSchema)
 def get_docling_settings(request):
-    """Get current Docling settings"""
-    settings = DoclingSettings.get_default_settings()
+    """Get current OCR settings"""
+    settings = OCRSettings.get_default_settings()
     return settings
 
 
 @router.put("/settings/", response=DoclingSettingsSchema)
 def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
-    """Update Docling settings"""
-    settings = DoclingSettings.get_default_settings()
+    """Update OCR settings"""
+    settings = OCRSettings.get_default_settings()
 
     for attr, value in payload.model_dump(exclude_unset=True).items():
         setattr(settings, attr, value)

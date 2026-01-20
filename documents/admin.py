@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Document, Page, Image, DoclingSettings
+from .models import Document, Page, Image, OCRSettings
 
 
 class PageInline(admin.TabularInline):
@@ -25,7 +25,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {
-            'fields': ('title', 'group', 'original_pdf', 'thumbnail')
+            'fields': ('title', 'group', 'original_pdf', 'thumbnail', 'ocr_model')
         }),
         ('Processing', {
             'fields': ('page_count', 'processing_status', 'processed_pages', 'processing_progress'),
@@ -54,6 +54,10 @@ class PageAdmin(admin.ModelAdmin):
             'fields': ('ocr_markdown_raw', 'text_markdown_clean'),
             'classes': ('collapse',)
         }),
+        ('DeepSeek OCR Data', {
+            'fields': ('ocr_references', 'bbox_visualization'),
+            'classes': ('collapse',)
+        }),
         ('Advanced', {
             'fields': ('docling_layout', 'metadata'),
             'classes': ('collapse',)
@@ -67,14 +71,14 @@ class PageAdmin(admin.ModelAdmin):
 
 @admin.register(Image)
 class ImageAdmin(admin.ModelAdmin):
-    list_display = ['page', 'caption', 'created_at']
+    list_display = ['page', 'width', 'height', 'caption', 'created_at']
     list_filter = ['page__document__group', 'created_at']
     search_fields = ['page__document__title', 'caption']
     readonly_fields = ['sqid', 'created_at', 'updated_at']
 
     fieldsets = (
         (None, {
-            'fields': ('page', 'image_file', 'caption')
+            'fields': ('page', 'image_file', 'caption', 'width', 'height')
         }),
         ('Metadata', {
             'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
@@ -83,20 +87,21 @@ class ImageAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(DoclingSettings)
-class DoclingSettingsAdmin(admin.ModelAdmin):
-    list_display = ['name', 'ocr_engine', 'language', 'updated_at']
+@admin.register(OCRSettings)
+class OCRSettingsAdmin(admin.ModelAdmin):
+    list_display = ['name', 'ocr_backend', 'default_model', 'language', 'updated_at']
     readonly_fields = ['sqid', 'created_at', 'updated_at']
 
     fieldsets = (
         (None, {
             'fields': ('name',)
         }),
-        ('OCR Settings', {
-            'fields': ('ocr_engine', 'language', 'confidence_threshold')
+        ('DeepSeek OCR Settings', {
+            'fields': ('ocr_backend', 'default_model', 'default_prompt')
         }),
-        ('Layout Detection', {
-            'fields': ('detect_tables', 'detect_figures', 'ignore_headers_footers')
+        ('Legacy Docling Settings', {
+            'fields': ('ocr_engine', 'language', 'confidence_threshold', 'detect_tables', 'detect_figures', 'ignore_headers_footers'),
+            'classes': ('collapse',)
         }),
         ('Advanced', {
             'fields': ('settings_json',),
@@ -113,4 +118,9 @@ class DoclingSettingsAdmin(admin.ModelAdmin):
         if obj and obj.name == 'default':
             return False
         return super().has_delete_permission(request, obj)
+
+
+# Keep alias for backward compatibility
+DoclingSettings = OCRSettings
+admin.site.register(OCRSettings)
 

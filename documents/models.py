@@ -42,6 +42,9 @@ class Document(BaseModel):
     original_pdf = models.FileField(upload_to=document_upload_path)
     page_count = models.PositiveIntegerField(default=0)
 
+    # OCR model selection
+    ocr_model = models.CharField(max_length=100, default='deepseek-ocr')
+
     # Processing status
     processing_status = models.CharField(
         max_length=20,
@@ -84,7 +87,11 @@ class Page(BaseModel):
         default=ProcessingStatus.PENDING
     )
 
-    # Docling data
+    # DeepSeek OCR data (replacing Docling)
+    ocr_references = models.JSONField(blank=True, null=True)  # Store parsed references
+    bbox_visualization = models.FileField(upload_to='bbox_visualizations/', blank=True, null=True)  # Bbox debug image
+    
+    # Legacy Docling data (keeping for backward compatibility)
     docling_layout = models.JSONField(blank=True, null=True)
 
     # search
@@ -113,6 +120,10 @@ class Image(BaseModel):
 
     image_file = models.FileField(upload_to=image_upload_path)
     caption = models.TextField(blank=True, null=True)
+    
+    # Image dimensions
+    width = models.PositiveIntegerField(default=0)
+    height = models.PositiveIntegerField(default=0)
 
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -120,12 +131,26 @@ class Image(BaseModel):
         return f"Image from {self.page}"
 
 
-class DoclingSettings(BaseModel):
-    """Singleton model for Docling configuration"""
+class OCRSettings(BaseModel):
+    """Configuration for OCR processing (DeepSeek-OCR or Docling)"""
 
     name = models.CharField(max_length=100, default="default", unique=True)
 
-    # OCR Settings
+    # OCR Engine Selection
+    ocr_backend = models.CharField(
+        max_length=50,
+        choices=[
+            ('deepseek-ocr', 'DeepSeek OCR'),
+            ('docling', 'Docling (Legacy)'),
+        ],
+        default='deepseek-ocr'
+    )
+
+    # DeepSeek OCR Settings
+    default_model = models.CharField(max_length=100, default='deepseek-ocr')
+    default_prompt = models.TextField(default='<|grounding|>Convert the document to markdown.')
+    
+    # Legacy Docling Settings (kept for backward compatibility)
     ocr_engine = models.CharField(
         max_length=50,
         choices=[
@@ -135,13 +160,9 @@ class DoclingSettings(BaseModel):
         ],
         default='tesseract'
     )
-
-    # Layout settings
     detect_tables = models.BooleanField(default=True)
     detect_figures = models.BooleanField(default=True)
     ignore_headers_footers = models.BooleanField(default=True)
-
-    # Processing settings
     language = models.CharField(max_length=10, default='en')
     confidence_threshold = models.FloatField(default=0.7)
 
@@ -149,11 +170,11 @@ class DoclingSettings(BaseModel):
     settings_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        verbose_name = "Docling Settings"
-        verbose_name_plural = "Docling Settings"
+        verbose_name = "OCR Settings"
+        verbose_name_plural = "OCR Settings"
 
     def __str__(self):
-        return f"Docling Settings: {self.name}"
+        return f"OCR Settings: {self.name}"
 
     @classmethod
     def get_default_settings(cls):
@@ -161,6 +182,9 @@ class DoclingSettings(BaseModel):
         settings, _ = cls.objects.get_or_create(
             name='default',
             defaults={
+                'ocr_backend': 'deepseek-ocr',
+                'default_model': 'deepseek-ocr',
+                'default_prompt': '<|grounding|>Convert the document to markdown.',
                 'ocr_engine': 'tesseract',
                 'detect_tables': True,
                 'detect_figures': True,
@@ -170,4 +194,8 @@ class DoclingSettings(BaseModel):
             }
         )
         return settings
+
+
+# Keep DoclingSettings as an alias for backward compatibility
+DoclingSettings = OCRSettings
 
