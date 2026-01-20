@@ -3,7 +3,8 @@ import os
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from unittest.mock import patch, MagicMock
-from documents.models import Document, Page, Image, DeepSeekOCRSettings, ProcessingStatus
+from documents.models import Document, Page, DeepSeekOCRSettings, ProcessingStatus
+from images.models import Image
 # from documents.tasks import process_document, generate_thumbnail, clean_markdown_text  # Commented out for now
 from groups.models import Group
 import json

@@ -4,8 +4,13 @@ from django.http import Http404
 from images.models import Image
 
 
-def image_redirect_view(request, image_sqid):
-    """Redirect to the image file URL by SQID"""
+def image_redirect_view(request, image_sqid, filename=None):
+    """Redirect to the image file URL by SQID
+    
+    Args:
+        image_sqid: The SQID of the image
+        filename: Optional filename (for SEO-friendly URLs)
+    """
     image = get_object_or_404(Image, sqid=image_sqid)
 
     # Check if image has a file attached
