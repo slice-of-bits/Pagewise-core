@@ -6,7 +6,8 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Value
 from collections import defaultdict
 
-from documents.models import Document, Page, Image, DeepSeekOCRSettings
+from documents.models import Document, Page, DeepSeekOCRSettings, ProcessingStatus
+from images.models import Image
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,
     PageSchema, PageUpdateSchema, ImageSchema,

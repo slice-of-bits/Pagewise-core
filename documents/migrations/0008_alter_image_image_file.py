@@ -4,6 +4,14 @@ import documents.models
 from django.db import migrations, models
 
 
+# Define upload path locally since it was moved to images app
+def local_image_upload_path(instance, filename):
+    """Generate upload path for extracted images: /{group}/{book-name}/{page-number}/images/{image-id}.jpg"""
+    group_name = instance.page.document.group.name
+    clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    return f"{group_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -14,6 +22,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='image',
             name='image_file',
-            field=models.ImageField(height_field='height', upload_to=documents.models.image_upload_path, width_field='width'),
+            field=models.ImageField(height_field='height', upload_to=local_image_upload_path, width_field='width'),
         ),
     ]
