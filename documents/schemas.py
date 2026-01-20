@@ -61,6 +61,7 @@ class DocumentSchema(ModelSchema):
 class DocumentCreateSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     group_sqid: str
+    ocr_model: Optional[str] = 'deepseek-ocr'  # Allow selection of OCR model
     metadata: Optional[dict] = {}
 
 
@@ -122,15 +123,11 @@ class ImageSchema(BaseModel):
         from_attributes = True
 
 
-class DoclingSettingsSchema(BaseModel):
+class DeepSeekOCRSettingsSchema(BaseModel):
     sqid: str
     name: str
-    ocr_engine: str
-    detect_tables: bool
-    detect_figures: bool
-    ignore_headers_footers: bool
-    language: str
-    confidence_threshold: float
+    default_model: str
+    default_prompt: str
     settings_json: dict
     created_at: datetime
     updated_at: datetime
@@ -139,13 +136,9 @@ class DoclingSettingsSchema(BaseModel):
         from_attributes = True
 
 
-class DoclingSettingsUpdateSchema(BaseModel):
-    ocr_engine: Optional[str] = Field(None, pattern="^(tesseract|easyocr|doctr)$")
-    detect_tables: Optional[bool] = None
-    detect_figures: Optional[bool] = None
-    ignore_headers_footers: Optional[bool] = None
-    language: Optional[str] = Field(None, min_length=2, max_length=10)
-    confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
+class DeepSeekOCRSettingsUpdateSchema(BaseModel):
+    default_model: Optional[str] = None
+    default_prompt: Optional[str] = None
     settings_json: Optional[dict] = None
 
 

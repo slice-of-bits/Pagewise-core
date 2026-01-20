@@ -2,16 +2,17 @@ import os
 import logging
 import tempfile
 import time
+import json
 
 from celery import shared_task
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.contrib.postgres.search import SearchVector
 import fitz  # PyMuPDF
-from docling.document_converter import DocumentConverter
-from docling.datamodel.base_models import InputFormat
+from PIL import Image as PILImage
 
-from documents.models import Document, Page, Image, ProcessingStatus, DoclingSettings
+from documents.models import Document, Page, Image, ProcessingStatus, DeepSeekOCRSettings
+from deepseek_ocr import process_image_with_ollama, create_placeholder_image_url_generator
 
 logger = logging.getLogger(__name__)
 
@@ -247,101 +248,145 @@ def split_pdf_pages(document_id: int):
 
 @shared_task
 def process_page(page_id: int):
-    """Process a single page with Docling"""
+    """Process a single page with DeepSeek-OCR"""
     try:
         page = Page.objects.get(id=page_id)
         page.processing_status = ProcessingStatus.PROCESSING
         page.save()
 
-        # Get Docling settings
-        settings = DoclingSettings.get_default_settings()
+        # Get OCR settings
+        settings = DeepSeekOCRSettings.get_default_settings()
+        
+        # Get the OCR model from the document
+        ocr_model = page.document.ocr_model or settings.default_model
+        
+        # Get OLLAMA_HOST from environment
+        ollama_host = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
 
-        # Use simple Docling configuration to avoid version compatibility issues
-        converter = None
-        try:
-            # Try to create converter with minimal options first
-            converter = DocumentConverter()
-            logger.info(f"Created DocumentConverter with default settings")
-        except Exception as e:
-            logger.error(f"Failed to create DocumentConverter: {e}")
-            # If we can't create DocumentConverter at all, fail gracefully
-            page.processing_status = ProcessingStatus.FAILED
-            page.save()
-            return
-
-        # Process the page - use temporary file for S3 storage compatibility
-        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_file:
-            # Use default_storage to read the file (works for both S3 and local)
+        # Convert PDF page to image for OCR processing
+        with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
             with default_storage.open(page.page_pdf.name, 'rb') as pdf_file:
                 content = pdf_file.read()
                 if len(content) == 0:
                     raise ValueError(f"Page PDF file {page.page_pdf.name} is empty")
                 if not content.startswith(b'%PDF'):
                     raise ValueError(f"Page PDF file {page.page_pdf.name} is not a valid PDF")
-                tmp_file.write(content)
-            pdf_path = tmp_file.name
+                tmp_pdf.write(content)
+            pdf_path = tmp_pdf.name
 
+        image_path = None
+        output_dir = None
         try:
-            logger.info(f"Processing page {page.page_number} of document {page.document.title}")
+            # Convert PDF to image
+            pdf_doc = fitz.open(pdf_path)
+            first_page = pdf_doc[0]
+            
+            # Render page to image at high resolution
+            mat = fitz.Matrix(2, 2)  # 2x zoom for better OCR quality
+            pix = first_page.get_pixmap(matrix=mat)
+            
+            # Save as temporary image
+            image_fd, image_path = tempfile.mkstemp(suffix='.png')
+            os.close(image_fd)
+            pix.save(image_path)
+            pdf_doc.close()
+            
+            # Create temporary output directory for OCR results
+            output_dir = tempfile.mkdtemp()
+            
+            # Process image with DeepSeek-OCR
+            # Use placeholder URLs - we'll replace them with sqids after saving images
+            logger.info(f"Processing page {page.page_number} of document {page.document.title} with model {ocr_model}")
+            result = process_image_with_ollama(
+                image_path=image_path,
+                output_dir=output_dir,
+                prompt=settings.default_prompt,
+                model=ocr_model,
+                host=ollama_host,
+                image_url_generator=create_placeholder_image_url_generator()
+            )
+            
+            # Store OCR results
+            page.ocr_markdown_raw = result['raw_output']
+            page.ocr_references = result['references']
+            
+            # Save bbox visualization image
+            bbox_viz_path = os.path.join(output_dir, 'bbox_visualization.png')
+            if os.path.exists(bbox_viz_path):
+                with open(bbox_viz_path, 'rb') as viz_file:
+                    page.bbox_visualization.save(
+                        f"page_{page.page_number}_bbox.png",
+                        ContentFile(viz_file.read()),
+                        save=False
+                    )
+            
+            # Extract and save images, get their sqids
+            markdown_with_sqids = result['markdown']
+            logger.info(f"Initial markdown: {markdown_with_sqids[:200]}...")
+            logger.info(f"Extracted images count: {len(result['extracted_images']) if result['extracted_images'] else 0}")
+
+            if result['extracted_images']:
+                image_sqids = extract_images_from_ocr_result(page, result['extracted_images'], output_dir)
+                logger.info(f"Image SQIDs collected: {image_sqids}")
+
+                # Replace placeholder URLs with actual sqid-based URLs
+                for idx, sqid in enumerate(image_sqids):
+                    placeholder = f"__IMAGE_PLACEHOLDER_{idx}__"
+                    logger.info(f"Replacing '{placeholder}' with '{sqid}'")
+                    markdown_with_sqids = markdown_with_sqids.replace(placeholder, sqid)
+
+                # Remove any remaining orphaned placeholders (where extraction failed)
+                import re
+                orphaned_placeholders = re.findall(r'__IMAGE_PLACEHOLDER_\d+__', markdown_with_sqids)
+                if orphaned_placeholders:
+                    logger.warning(f"Found {len(orphaned_placeholders)} orphaned placeholders for page {page.page_number}: {orphaned_placeholders}")
+                    for orphan in orphaned_placeholders:
+                        logger.warning(f"Removing orphaned placeholder: {orphan}")
+                        # Remove the entire markdown image syntax
+                        markdown_with_sqids = re.sub(r'!\[Image\]\(' + re.escape(orphan) + r'\)\n?', '', markdown_with_sqids)
+            else:
+                logger.warning(f"No extracted images found for page {page.page_number}")
+
+            logger.info(f"Final markdown: {markdown_with_sqids[:200]}...")
+
+            # Store the final markdown with sqids
+            page.text_markdown_clean = markdown_with_sqids
+
+            # Update search vector
             try:
-                result = converter.convert(pdf_path)
+                page.search_vector = SearchVector('text_markdown_clean')
             except Exception as e:
-                logger.error(f"Docling conversion failed for page {page.id}: {e}")
-                # Set page as failed but don't crash the task
-                page.processing_status = ProcessingStatus.FAILED
-                page.save()
-                return
+                logger.warning(f"Could not update search vector for page {page.id}: {e}")
+
+            page.processing_status = ProcessingStatus.COMPLETED
+            page.save()
+            
+            # Update document progress
+            update_document_progress(page.document.id)
+            
+            logger.info(f"Page processing completed: {page}")
+
         finally:
-            # Clean up temporary file
-            try:
-                os.unlink(pdf_path)
-            except (OSError, PermissionError) as e:
-                logger.warning(f"Could not delete temporary file {pdf_path}: {e}")
-                # Try brief delay and retry
-                time.sleep(0.1)
+            # Clean up temporary files
+            if pdf_path and os.path.exists(pdf_path):
                 try:
                     os.unlink(pdf_path)
                 except (OSError, PermissionError):
-                    logger.error(f"Could not delete temporary file even after delay: {pdf_path}")
-
-        # Extract both markdown and JSON content
-        # Markdown for search functionality
-        try:
-            page.ocr_markdown_raw = result.document.export_to_markdown()
-        except Exception as e:
-            logger.error(f"Error exporting markdown for page {page.id}: {e}")
-            page.ocr_markdown_raw = ""
-
-        # Clean text (remove headers/footers if enabled)
-        if settings.ignore_headers_footers and page.ocr_markdown_raw:
-            page.text_markdown_clean = clean_markdown_text(page.ocr_markdown_raw)
-        else:
-            page.text_markdown_clean = page.ocr_markdown_raw
-
-        # JSON for structural data and future use
-        try:
-            page.docling_layout = result.document.export_to_dict()
-        except Exception as e:
-            logger.error(f"Error exporting layout for page {page.id}: {e}")
-            page.docling_layout = {}
-
-        # Extract images
-        if page.docling_layout:
-            extract_images_from_page.delay(page.id, page.docling_layout)
-
-        # Update search vector
-        try:
-            page.search_vector = SearchVector('text_markdown_clean')
-        except Exception as e:
-            logger.warning(f"Could not update search vector for page {page.id}: {e}")
-
-        page.processing_status = ProcessingStatus.COMPLETED
-        page.save()
-
-        # Update document progress
-        update_document_progress(page.document.id)
-
-        logger.info(f"Page processing completed: {page}")
+                    pass
+            
+            if image_path and os.path.exists(image_path):
+                try:
+                    os.unlink(image_path)
+                except (OSError, PermissionError):
+                    pass
+            
+            # Clean up output directory
+            if output_dir and os.path.exists(output_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(output_dir)
+                except (OSError, PermissionError):
+                    pass
 
     except Exception as e:
         logger.error(f"Error processing page {page_id}: {str(e)}")
@@ -350,30 +395,69 @@ def process_page(page_id: int):
         page.save()
 
 
-@shared_task
-def extract_images_from_page(page_id: int, layout_data: dict):
-    """Extract images from page layout data"""
+def extract_images_from_ocr_result(page: Page, extracted_images: list, output_dir: str):
+    """Extract images from OCR result and save them to the database
+
+    Returns:
+        List of image sqids in the order they were extracted
+    """
+    logger.info(f"Extracting {len(extracted_images)} images for page {page.page_number}")
+    image_sqids = []
     try:
-        page = Page.objects.get(id=page_id)
+        for img_info in extracted_images:
+            img_path = img_info['path']
+            logger.info(f"Processing image at path: {img_path}")
 
-        # Extract figures from layout data
-        if 'figures' in layout_data:
-            for idx, figure in enumerate(layout_data['figures']):
-                if 'image' in figure:
-                    # Save image
-                    image_name = f"page_{page.page_number}_img_{idx + 1}.jpg"
-                    image_obj = Image.objects.create(
-                        page=page,
-                        caption=figure.get('caption', ''),
-                        metadata={'figure_data': figure}
-                    )
+            if os.path.exists(img_path):
+                try:
+                    with open(img_path, 'rb') as img_file:
+                        file_content = img_file.read()
 
-                    # Note: In a real implementation, you'd extract the actual image data
-                    # from the figure object and save it to the ImageField
-                    logger.info(f"Image extracted from page {page}: {image_name}")
+                        # Validate file content
+                        if len(file_content) == 0:
+                            logger.error(f"Image file at {img_path} is empty, skipping")
+                            continue
+
+                        # Create image object without saving to DB yet
+                        image_obj = Image(
+                            page=page,
+                            metadata={'index': img_info['index']}
+                        )
+
+                        # Save the image file - Django will automatically populate width and height
+                        image_obj.image_file.save(
+                            f"image_{img_info['index']}.png",
+                            ContentFile(file_content),
+                            save=True  # This saves the image_obj to DB with auto-populated dimensions
+                        )
+
+                        # Verify the file was actually saved
+                        if not image_obj.image_file:
+                            logger.error(f"Failed to save image file for index {img_info['index']}, deleting image object")
+                            image_obj.delete()
+                            continue
+
+                        # Add the sqid to the list
+                        image_sqids.append(image_obj.sqid)
+
+                        logger.info(f"Saved extracted image {img_info['index']} from page {page} with sqid {image_obj.sqid} (dimensions: {image_obj.width}x{image_obj.height}, file: {image_obj.image_file.name})")
+
+                except Exception as img_error:
+                    logger.error(f"Error saving image at index {img_info['index']}: {str(img_error)}")
+                    # Clean up if image object was created
+                    try:
+                        if 'image_obj' in locals() and image_obj.pk:
+                            image_obj.delete()
+                    except:
+                        pass
+            else:
+                logger.warning(f"Image file not found at path: {img_path}")
 
     except Exception as e:
-        logger.error(f"Error extracting images from page {page_id}: {str(e)}")
+        logger.error(f"Error extracting images from page {page.id}: {str(e)}")
+
+    logger.info(f"Returning {len(image_sqids)} image sqids: {image_sqids}")
+    return image_sqids
 
 
 def clean_markdown_text(raw_text: str) -> str:

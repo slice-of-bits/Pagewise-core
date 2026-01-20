@@ -7,11 +7,12 @@ A comprehensive document management backend for scanned books with page-level se
 - **Document Management**: Upload and manage PDF documents organized in buckets
 - **Page-Level Processing**: Each page is stored as a separate model for granular search
 - **Background Processing**: Celery-powered asynchronous document processing
-- **OCR & Text Extraction**: Uses Docling for advanced document understanding
+- **OCR & Text Extraction**: Uses DeepSeek-OCR via Ollama for advanced document understanding
+- **Bounding Box Detection**: Extracts and visualizes text regions and images
+- **Image Extraction**: Extract embedded images with dimensions from document pages
 - **Thumbnail Generation**: Automatic thumbnail generation from first page
 - **Progress Tracking**: Real-time processing progress monitoring
-- **Configurable Processing**: User-configurable Docling settings
-- **Image Extraction**: Extract and store images from document pages
+- **Configurable Processing**: User-configurable OCR settings
 - **Advanced Search**: Full-text search with bucket and document filtering
 - **REST API**: Django Ninja-powered API for all operations
 
@@ -30,10 +31,11 @@ A comprehensive document management backend for scanned books with page-level se
                        └──────────────────┘    └─────────────────┘
                                 │
                                 ▼
-                       ┌──────────────────┐
-                       │     Docling      │
-                       │ (Text Extraction)│
-                       └──────────────────┘
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │  DeepSeek-OCR    │───▶│     Ollama      │
+                       │ (via deepseek_ocr│    │  (Model Hosting)│
+                       │     package)     │    │                 │
+                       └──────────────────┘    └─────────────────┘
 ```
 
 ## File Organization
@@ -63,6 +65,7 @@ media/
 - Python 3.12+
 - PostgreSQL (for production) or SQLite (for development)
 - Redis (for Celery)
+- Ollama with DeepSeek-OCR model
 
 ### Installation
 
@@ -79,13 +82,20 @@ media/
    pip install -e .
    ```
 
-3. **Set up the database:**
+3. **Install and configure Ollama:**
+   ```bash
+   # Install Ollama (see https://ollama.ai)
+   # Pull DeepSeek-OCR model
+   ollama pull deepseek-ocr
+   ```
+
+4. **Set up the database:**
    ```bash
    python manage.py migrate
    python manage.py createsuperuser
    ```
 
-4. **Start the development server:**
+5. **Start the development server:**
    ```bash
    python manage.py runserver
    ```
@@ -166,6 +176,7 @@ curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
   -F "group_sqid=bucket_sqid_here" \
+  -F "ocr_model=deepseek-ocr" \
   -F "metadata={\"author\": \"John Doe\"}"
 ```
 
@@ -193,8 +204,8 @@ Individual pages with OCR text and layout data.
 ### Image
 Images extracted from document pages.
 
-### DoclingSettings
-Configurable settings for document processing.
+### OCRSettings
+Configurable settings for OCR processing (DeepSeek-OCR or legacy Docling).
 
 ## Background Processing
 
@@ -204,8 +215,9 @@ The system uses Celery for background processing with the following workflow:
 2. **PDF Analysis** → Extract page count
 3. **Thumbnail Generation** → First page as JPEG
 4. **Page Splitting** → Individual PDF pages
-5. **Page Processing** → OCR and layout analysis per page
-6. **Progress Updates** → Real-time status tracking
+5. **Page Processing** → Convert to image, run DeepSeek-OCR via Ollama
+6. **Data Extraction** → Parse references, extract images, generate markdown
+7. **Progress Updates** → Real-time status tracking
 
 ### Starting Celery Workers
 
@@ -224,16 +236,22 @@ celery -A pagewise worker --loglevel=info --concurrency=4
 - `DEBUG`: Debug mode (default: True)
 - `DATABASE_URL`: PostgreSQL connection string
 - `REDIS_URL`: Redis connection string (default: redis://localhost:6379/0)
+- `OLLAMA_HOST`: Ollama server URL (default: http://localhost:11434)
+- `AWS_ACCESS_KEY_ID`: S3/MinIO access key
+- `AWS_SECRET_ACCESS_KEY`: S3/MinIO secret key
+- `AWS_STORAGE_BUCKET_NAME`: S3/MinIO bucket name
+- `AWS_S3_ENDPOINT_URL`: S3/MinIO endpoint URL
 
-### Docling Settings
+### OCR Settings
 
 Configurable through the admin interface or API:
 
-- **OCR Engine**: tesseract, easyocr, doctr
+- **OCR Backend**: deepseek-ocr (recommended), docling (legacy)
+- **Default Model**: Model name for DeepSeek-OCR (default: deepseek-ocr)
+- **Default Prompt**: OCR prompt template
 - **Language**: Document language for OCR
-- **Layout Detection**: Tables, figures, headers/footers
-- **Output Format**: markdown, text, json
-- **Confidence Threshold**: OCR confidence level
+- **Layout Detection**: Tables, figures, headers/footers (legacy Docling)
+- **Confidence Threshold**: OCR confidence level (legacy Docling)
 
 ## Testing
 
