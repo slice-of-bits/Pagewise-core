@@ -108,6 +108,9 @@ def generate_image_alt_text(image_id: int):
         # Get OLLAMA_HOST from environment
         ollama_host = os.environ.get('OLLAMA_HOST', 'http://localhost:11434')
         
+        # Get model name from environment or use default
+        model_name = os.environ.get('IMAGE_ALT_TEXT_MODEL', 'qwen2-vl')
+        
         # Download the image to a temporary file
         with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as tmp_file:
             with default_storage.open(image.image_file.name, 'rb') as img_file:
@@ -115,7 +118,7 @@ def generate_image_alt_text(image_id: int):
             img_path = tmp_file.name
         
         try:
-            # Use ollama to generate alt text with qwen-2vl model
+            # Use ollama to generate alt text with vision model
             import ollama
             
             # Read the image and encode it to base64
@@ -123,19 +126,19 @@ def generate_image_alt_text(image_id: int):
                 import base64
                 img_base64 = base64.b64encode(img_file.read()).decode('utf-8')
             
-            # Generate alt text using qwen-2vl model
-            response = ollama.chat(
-                model='qwen2-vl',
+            # Create ollama client with custom host
+            client = ollama.Client(host=ollama_host)
+            
+            # Generate alt text using vision model
+            response = client.chat(
+                model=model_name,
                 messages=[
                     {
                         'role': 'user',
                         'content': 'Describe this image concisely in 5-10 words suitable for a filename. Focus on the main subject.',
                         'images': [img_base64]
                     }
-                ],
-                options={
-                    'host': ollama_host
-                }
+                ]
             )
             
             # Extract alt text from response

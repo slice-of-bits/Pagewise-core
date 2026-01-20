@@ -6,10 +6,25 @@ import os
 from pagewise.models import BaseModel
 
 
+def clean_filename(text: str, max_length: int = 100) -> str:
+    """Clean text to create a valid filename
+    
+    Args:
+        text: The text to clean
+        max_length: Maximum length of the filename
+        
+    Returns:
+        Cleaned filename string
+    """
+    clean_name = "".join(c for c in text if c.isalnum() or c in (' ', '-', '_')).strip()
+    clean_name = clean_name.replace(' ', '-')
+    return clean_name[:max_length]
+
+
 def image_upload_path(instance, filename):
     """Generate upload path for extracted images: /{group}/{book-name}/{page-number}/images/{filename}"""
     group_name = instance.page.document.group.name
-    clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    clean_title = clean_filename(instance.page.document.title)
     return f"{group_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
 
 
@@ -45,9 +60,8 @@ class Image(BaseModel):
     def filename(self):
         """Get the filename for the image based on alt text"""
         if self.alt_text:
-            # Clean alt text to create a valid filename
-            clean_name = "".join(c for c in self.alt_text if c.isalnum() or c in (' ', '-', '_')).strip()
-            clean_name = clean_name.replace(' ', '-')[:100]  # Limit to 100 chars
+            # Use shared utility function to clean alt text
+            clean_name = clean_filename(self.alt_text, max_length=100)
             if clean_name:
                 # Get file extension
                 ext = os.path.splitext(self.image_file.name)[1] or '.jpg'
