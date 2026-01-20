@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Document, Page, Image, OCRSettings
+from .models import Document, Page, Image, DeepSeekOCRSettings
 
 
 class PageInline(admin.TabularInline):
@@ -58,12 +58,8 @@ class PageAdmin(admin.ModelAdmin):
             'fields': ('ocr_references', 'bbox_visualization'),
             'classes': ('collapse',)
         }),
-        ('Advanced', {
-            'fields': ('docling_layout', 'metadata'),
-            'classes': ('collapse',)
-        }),
         ('Metadata', {
-            'fields': ('sqid', 'created_at', 'updated_at'),
+            'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
             'classes': ('collapse',)
         }),
     )
@@ -87,9 +83,9 @@ class ImageAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(OCRSettings)
-class OCRSettingsAdmin(admin.ModelAdmin):
-    list_display = ['name', 'ocr_backend', 'default_model', 'language', 'updated_at']
+@admin.register(DeepSeekOCRSettings)
+class DeepSeekOCRSettingsAdmin(admin.ModelAdmin):
+    list_display = ['name', 'default_model', 'updated_at']
     readonly_fields = ['sqid', 'created_at', 'updated_at']
 
     fieldsets = (
@@ -97,11 +93,7 @@ class OCRSettingsAdmin(admin.ModelAdmin):
             'fields': ('name',)
         }),
         ('DeepSeek OCR Settings', {
-            'fields': ('ocr_backend', 'default_model', 'default_prompt')
-        }),
-        ('Legacy Docling Settings', {
-            'fields': ('ocr_engine', 'language', 'confidence_threshold', 'detect_tables', 'detect_figures', 'ignore_headers_footers'),
-            'classes': ('collapse',)
+            'fields': ('default_model', 'default_prompt')
         }),
         ('Advanced', {
             'fields': ('settings_json',),

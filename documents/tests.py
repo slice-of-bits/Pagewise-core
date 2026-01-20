@@ -3,7 +3,7 @@ import os
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from unittest.mock import patch, MagicMock
-from documents.models import Document, Page, Image, OCRSettings, ProcessingStatus
+from documents.models import Document, Page, Image, DeepSeekOCRSettings, ProcessingStatus
 # from documents.tasks import process_document, generate_thumbnail, clean_markdown_text  # Commented out for now
 from groups.models import Group
 import json
@@ -99,18 +99,17 @@ class PageModelTest(TestCase):
             )
 
 
-class OCRSettingsTest(TestCase):
+class DeepSeekOCRSettingsTest(TestCase):
     def test_get_default_settings(self):
         """Test getting default settings creates them if they don't exist"""
-        settings = OCRSettings.get_default_settings()
+        settings = DeepSeekOCRSettings.get_default_settings()
         self.assertEqual(settings.name, "default")
-        self.assertEqual(settings.ocr_backend, "deepseek-ocr")
         self.assertEqual(settings.default_model, "deepseek-ocr")
 
     def test_singleton_behavior(self):
         """Test that get_default_settings returns the same instance"""
-        settings1 = OCRSettings.get_default_settings()
-        settings2 = OCRSettings.get_default_settings()
+        settings1 = DeepSeekOCRSettings.get_default_settings()
+        settings2 = DeepSeekOCRSettings.get_default_settings()
         self.assertEqual(settings1.id, settings2.id)
 
 

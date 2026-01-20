@@ -123,18 +123,11 @@ class ImageSchema(BaseModel):
         from_attributes = True
 
 
-class DoclingSettingsSchema(BaseModel):
+class DeepSeekOCRSettingsSchema(BaseModel):
     sqid: str
     name: str
-    ocr_backend: str
     default_model: str
     default_prompt: str
-    ocr_engine: str
-    detect_tables: bool
-    detect_figures: bool
-    ignore_headers_footers: bool
-    language: str
-    confidence_threshold: float
     settings_json: dict
     created_at: datetime
     updated_at: datetime
@@ -143,25 +136,10 @@ class DoclingSettingsSchema(BaseModel):
         from_attributes = True
 
 
-# Alias for backward compatibility
-OCRSettingsSchema = DoclingSettingsSchema
-
-
-class DoclingSettingsUpdateSchema(BaseModel):
-    ocr_backend: Optional[str] = Field(None, pattern="^(deepseek-ocr|docling)$")
+class DeepSeekOCRSettingsUpdateSchema(BaseModel):
     default_model: Optional[str] = None
     default_prompt: Optional[str] = None
-    ocr_engine: Optional[str] = Field(None, pattern="^(tesseract|easyocr|doctr)$")
-    detect_tables: Optional[bool] = None
-    detect_figures: Optional[bool] = None
-    ignore_headers_footers: Optional[bool] = None
-    language: Optional[str] = Field(None, min_length=2, max_length=10)
-    confidence_threshold: Optional[float] = Field(None, ge=0.0, le=1.0)
     settings_json: Optional[dict] = None
-
-
-# Alias for backward compatibility
-OCRSettingsUpdateSchema = DoclingSettingsUpdateSchema
 
 
 class SearchDocumentSchema(BaseModel):

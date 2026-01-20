@@ -66,10 +66,17 @@ class Document(BaseModel):
         return (self.processed_pages / self.page_count) * 100
 
 def page_upload_path(instance, filename):
-    """Generate upload path for individual pages"""
+    """Generate upload path for individual pages: /{group}/{book-name}/{page-number}/page-{number}.pdf"""
     group_name = instance.document.group.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/pages/{instance.page_number}.pdf"
+    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.pdf"
+
+
+def bbox_visualization_upload_path(instance, filename):
+    """Generate upload path for bbox visualization: /{group}/{book-name}/{page-number}/page-{number}-bbox.jpg"""
+    group_name = instance.document.group.name
+    clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}-bbox.jpg"
 
 
 class Page(BaseModel):
@@ -87,12 +94,9 @@ class Page(BaseModel):
         default=ProcessingStatus.PENDING
     )
 
-    # DeepSeek OCR data (replacing Docling)
+    # DeepSeek OCR data
     ocr_references = models.JSONField(blank=True, null=True)  # Store parsed references
-    bbox_visualization = models.FileField(upload_to='bbox_visualizations/', blank=True, null=True)  # Bbox debug image
-    
-    # Legacy Docling data (keeping for backward compatibility)
-    docling_layout = models.JSONField(blank=True, null=True)
+    bbox_visualization = models.FileField(upload_to=bbox_visualization_upload_path, blank=True, null=True)  # Bbox debug image
 
     # search
     # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
@@ -109,10 +113,10 @@ class Page(BaseModel):
         return f"{self.document.title} - Page {self.page_number}"
 
 def image_upload_path(instance, filename):
-    """Generate upload path for extracted images"""
+    """Generate upload path for extracted images: /{group}/{book-name}/{page-number}/images/{image-id}.jpg"""
     group_name = instance.page.document.group.name
     clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/images/{instance.page.page_number}_{filename}"
+    return f"{group_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
 
 
 class Image(BaseModel):
@@ -131,50 +135,24 @@ class Image(BaseModel):
         return f"Image from {self.page}"
 
 
-class OCRSettings(BaseModel):
-    """Configuration for OCR processing (DeepSeek-OCR or Docling)"""
+class DeepSeekOCRSettings(BaseModel):
+    """Configuration for DeepSeek OCR processing"""
 
     name = models.CharField(max_length=100, default="default", unique=True)
-
-    # OCR Engine Selection
-    ocr_backend = models.CharField(
-        max_length=50,
-        choices=[
-            ('deepseek-ocr', 'DeepSeek OCR'),
-            ('docling', 'Docling (Legacy)'),
-        ],
-        default='deepseek-ocr'
-    )
 
     # DeepSeek OCR Settings
     default_model = models.CharField(max_length=100, default='deepseek-ocr')
     default_prompt = models.TextField(default='<|grounding|>Convert the document to markdown.')
-    
-    # Legacy Docling Settings (kept for backward compatibility)
-    ocr_engine = models.CharField(
-        max_length=50,
-        choices=[
-            ('tesseract', 'Tesseract'),
-            ('easyocr', 'EasyOCR'),
-            ('doctr', 'DocTR'),
-        ],
-        default='tesseract'
-    )
-    detect_tables = models.BooleanField(default=True)
-    detect_figures = models.BooleanField(default=True)
-    ignore_headers_footers = models.BooleanField(default=True)
-    language = models.CharField(max_length=10, default='en')
-    confidence_threshold = models.FloatField(default=0.7)
 
     # Advanced settings JSON for additional configuration
     settings_json = models.JSONField(default=dict, blank=True)
 
     class Meta:
-        verbose_name = "OCR Settings"
-        verbose_name_plural = "OCR Settings"
+        verbose_name = "DeepSeek OCR Settings"
+        verbose_name_plural = "DeepSeek OCR Settings"
 
     def __str__(self):
-        return f"OCR Settings: {self.name}"
+        return f"DeepSeek OCR Settings: {self.name}"
 
     @classmethod
     def get_default_settings(cls):
@@ -182,20 +160,9 @@ class OCRSettings(BaseModel):
         settings, _ = cls.objects.get_or_create(
             name='default',
             defaults={
-                'ocr_backend': 'deepseek-ocr',
                 'default_model': 'deepseek-ocr',
                 'default_prompt': '<|grounding|>Convert the document to markdown.',
-                'ocr_engine': 'tesseract',
-                'detect_tables': True,
-                'detect_figures': True,
-                'ignore_headers_footers': True,
-                'language': 'en',
-                'confidence_threshold': 0.7,
             }
         )
         return settings
-
-
-# Keep DoclingSettings as an alias for backward compatibility
-DoclingSettings = OCRSettings
 

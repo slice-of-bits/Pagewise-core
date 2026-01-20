@@ -6,15 +6,15 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Value
 from collections import defaultdict
 
-from documents.models import Document, Page, Image, OCRSettings
+from documents.models import Document, Page, Image, DeepSeekOCRSettings
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,
     PageSchema, PageUpdateSchema, ImageSchema,
-    DoclingSettingsSchema, DoclingSettingsUpdateSchema,
+    DeepSeekOCRSettingsSchema, DeepSeekOCRSettingsUpdateSchema,
     SearchResultSchema, SearchDocumentSchema, SearchPageSchema, DocumentListFilterSchema,
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
-from documents.tasks import process_document
+from documents.tasks import process_document, process_page
 from groups.models import Group
 
 router = Router()
@@ -158,6 +158,43 @@ def get_page_images(request, sqid: str):
     return page.images.all()
 
 
+@router.post("/pages/{sqid}/reprocess")
+def reprocess_page(request, sqid: str, ocr_model: str = 'deepseek-ocr'):
+    """
+    Reprocess a page with specified OCR model.
+    Clears old OCR data and starts reprocessing.
+    Useful for development, testing, and production updates.
+    """
+    page = get_object_or_404(Page, sqid=sqid)
+    
+    # Update the document's OCR model if provided
+    if ocr_model:
+        page.document.ocr_model = ocr_model
+        page.document.save()
+    
+    # Clear old OCR data
+    page.ocr_markdown_raw = ''
+    page.text_markdown_clean = ''
+    page.ocr_references = None
+    page.bbox_visualization = None
+    page.processing_status = ProcessingStatus.PENDING
+    page.save()
+    
+    # Delete old extracted images
+    page.images.all().delete()
+    
+    # Start reprocessing task
+    task = process_page.delay(page.id)
+    
+    return {
+        "success": True,
+        "message": f"Page {page.page_number} queued for reprocessing with model {ocr_model}",
+        "task_id": task.id,
+        "page_sqid": page.sqid,
+        "ocr_model": ocr_model
+    }
+
+
 # Image endpoints
 @router.get("/images/{sqid}", response=ImageSchema)
 def get_image(request, sqid: str):
@@ -252,18 +289,18 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         total_results=queryset.count()
     )
 
-# OCR Settings endpoints
-@router.get("/settings/", response=DoclingSettingsSchema)
-def get_docling_settings(request):
-    """Get current OCR settings"""
-    settings = OCRSettings.get_default_settings()
+# DeepSeek OCR Settings endpoints
+@router.get("/settings/", response=DeepSeekOCRSettingsSchema)
+def get_ocr_settings(request):
+    """Get current DeepSeek OCR settings"""
+    settings = DeepSeekOCRSettings.get_default_settings()
     return settings
 
 
-@router.put("/settings/", response=DoclingSettingsSchema)
-def update_docling_settings(request, payload: DoclingSettingsUpdateSchema):
-    """Update OCR settings"""
-    settings = OCRSettings.get_default_settings()
+@router.put("/settings/", response=DeepSeekOCRSettingsSchema)
+def update_ocr_settings(request, payload: DeepSeekOCRSettingsUpdateSchema):
+    """Update DeepSeek OCR settings"""
+    settings = DeepSeekOCRSettings.get_default_settings()
 
     for attr, value in payload.model_dump(exclude_unset=True).items():
         setattr(settings, attr, value)

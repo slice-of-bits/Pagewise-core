@@ -11,7 +11,7 @@ from django.contrib.postgres.search import SearchVector
 import fitz  # PyMuPDF
 from PIL import Image as PILImage
 
-from documents.models import Document, Page, Image, ProcessingStatus, OCRSettings
+from documents.models import Document, Page, Image, ProcessingStatus, DeepSeekOCRSettings
 from deepseek_ocr import process_image_with_ollama
 
 logger = logging.getLogger(__name__)
@@ -255,7 +255,7 @@ def process_page(page_id: int):
         page.save()
 
         # Get OCR settings
-        settings = OCRSettings.get_default_settings()
+        settings = DeepSeekOCRSettings.get_default_settings()
         
         # Get the OCR model from the document
         ocr_model = page.document.ocr_model or settings.default_model
