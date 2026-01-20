@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Document, Page, Image, DeepSeekOCRSettings
+from .models import Document, Page, DeepSeekOCRSettings
 
 
 class PageInline(admin.TabularInline):
@@ -7,12 +7,6 @@ class PageInline(admin.TabularInline):
     extra = 0
     readonly_fields = ['sqid', 'processing_status', 'created_at']
     fields = ['page_number', 'processing_status', 'created_at']
-
-
-class ImageInline(admin.TabularInline):
-    model = Image
-    extra = 0
-    readonly_fields = ['sqid']
 
 
 @admin.register(Document)
@@ -44,7 +38,6 @@ class PageAdmin(admin.ModelAdmin):
     list_filter = ['processing_status', 'document__group', 'created_at']
     search_fields = ['document__title', 'text_markdown_clean']
     readonly_fields = ['sqid', 'created_at', 'updated_at']
-    inlines = [ImageInline]
 
     fieldsets = (
         (None, {
@@ -57,24 +50,6 @@ class PageAdmin(admin.ModelAdmin):
         ('DeepSeek OCR Data', {
             'fields': ('ocr_references', 'bbox_visualization'),
             'classes': ('collapse',)
-        }),
-        ('Metadata', {
-            'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
-        }),
-    )
-
-
-@admin.register(Image)
-class ImageAdmin(admin.ModelAdmin):
-    list_display = ['page', 'width', 'height', 'caption', 'created_at']
-    list_filter = ['page__document__group', 'created_at']
-    search_fields = ['page__document__title', 'caption']
-    readonly_fields = ['sqid', 'created_at', 'updated_at']
-
-    fieldsets = (
-        (None, {
-            'fields': ('page', 'image_file', 'caption', 'width', 'height')
         }),
         ('Metadata', {
             'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
