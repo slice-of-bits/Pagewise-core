@@ -11,7 +11,7 @@ from django.contrib.postgres.search import SearchVector
 import fitz  # PyMuPDF
 from PIL import Image as PILImage
 
-from documents.models import Document, Page, Image, ProcessingStatus, DeepSeekOCRSettings
+from documents.models import Document, Page, Image, ProcessingStatus, DeepSeekOCRSettings, DoclingPreset
 from deepseek_ocr import process_image_with_ollama, create_placeholder_image_url_generator
 
 logger = logging.getLogger(__name__)
@@ -212,7 +212,11 @@ def split_pdf_pages(document_id: int):
                         pass
 
                 # Start processing this page
-                process_page.delay(page.id)
+                # Use Docling if preset is set, otherwise use DeepSeek
+                if document.docling_preset:
+                    process_page_with_docling_task.delay(page.id)
+                else:
+                    process_page.delay(page.id)
 
             # Explicitly close the main PDF document BEFORE cleanup
             if pdf_doc is not None:
@@ -501,3 +505,112 @@ def update_document_progress(document_id: int):
 
     except Exception as e:
         logger.error(f"Error updating document progress for {document_id}: {str(e)}")
+
+
+@shared_task
+def process_page_with_docling_task(page_id: int):
+    """Process a single page with Docling using the document's preset"""
+    try:
+        from documents.models import DoclingPreset
+        from documents.docling_processor import process_page_with_docling
+        
+        page = Page.objects.get(id=page_id)
+        page.processing_status = ProcessingStatus.PROCESSING
+        page.save()
+        
+        # Get the docling preset from the document or use default
+        preset = page.document.docling_preset
+        if not preset:
+            preset = DoclingPreset.get_default_preset()
+        
+        # Create temporary output directory for images
+        output_dir = tempfile.mkdtemp()
+        
+        try:
+            logger.info(f"Processing page {page.page_number} with Docling preset {preset.name}")
+            
+            # Process with Docling
+            result = process_page_with_docling(page, preset, output_dir)
+            
+            # Store Docling JSON
+            page.docling_json = result['docling_json']
+            
+            # Store markdown (use override if exists, otherwise use generated)
+            if page.docling_json_override:
+                # If there's an override, regenerate markdown from it
+                # For now, just use the generated markdown
+                page.text_markdown_clean = result['markdown']
+            else:
+                page.text_markdown_clean = result['markdown']
+            
+            # Also store as raw OCR markdown for compatibility
+            page.ocr_markdown_raw = result['markdown']
+            
+            # Extract and save images
+            markdown_with_sqids = result['markdown']
+            if result['images']:
+                image_sqids = []
+                for img_info in result['images']:
+                    img_path = img_info['path']
+                    
+                    if os.path.exists(img_path):
+                        try:
+                            with open(img_path, 'rb') as img_file:
+                                file_content = img_file.read()
+                                
+                                if len(file_content) == 0:
+                                    logger.error(f"Image file at {img_path} is empty, skipping")
+                                    continue
+                                
+                                # Create image object
+                                image_obj = Image(
+                                    page=page,
+                                    caption=img_info.get('caption', ''),
+                                    metadata={'index': img_info['index']}
+                                )
+                                
+                                # Save the image file
+                                image_obj.image_file.save(
+                                    f"image_{img_info['index']}.png",
+                                    ContentFile(file_content),
+                                    save=True
+                                )
+                                
+                                image_sqids.append(image_obj.sqid)
+                                logger.info(f"Saved image {img_info['index']} from page {page} with sqid {image_obj.sqid}")
+                                
+                        except Exception as img_error:
+                            logger.error(f"Error saving image at index {img_info['index']}: {str(img_error)}")
+                
+                # Replace image references in markdown with sqids if needed
+                # Docling already includes images in markdown, so this might not be needed
+                # but we keep it for consistency with DeepSeek processing
+            
+            # Update search vector
+            try:
+                page.search_vector = SearchVector('text_markdown_clean')
+            except Exception as e:
+                logger.warning(f"Could not update search vector for page {page.id}: {e}")
+            
+            page.processing_status = ProcessingStatus.COMPLETED
+            page.save()
+            
+            # Update document progress
+            update_document_progress(page.document.id)
+            
+            logger.info(f"Page processing completed with Docling: {page}")
+            
+        finally:
+            # Clean up output directory
+            if output_dir and os.path.exists(output_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(output_dir)
+                except (OSError, PermissionError):
+                    pass
+    
+    except Exception as e:
+        logger.error(f"Error processing page {page_id} with Docling: {str(e)}")
+        page = Page.objects.get(id=page_id)
+        page.processing_status = ProcessingStatus.FAILED
+        page.save()

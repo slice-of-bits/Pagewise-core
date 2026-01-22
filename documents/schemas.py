@@ -62,11 +62,13 @@ class DocumentCreateSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     group_sqid: str
     ocr_model: Optional[str] = 'deepseek-ocr'  # Allow selection of OCR model
+    docling_preset_sqid: Optional[str] = None  # Allow selection of Docling preset
     metadata: Optional[dict] = {}
 
 
 class DocumentUpdateSchema(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=500)
+    docling_preset_sqid: Optional[str] = None  # Allow updating Docling preset
     metadata: Optional[dict] = None
 
 

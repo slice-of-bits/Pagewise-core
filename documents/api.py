@@ -34,10 +34,17 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
     group = get_object_or_404(Group, sqid=payload.group_sqid)
+    
+    # Get docling preset if specified
+    docling_preset = None
+    if payload.docling_preset_sqid:
+        docling_preset = get_object_or_404(DoclingPreset, sqid=payload.docling_preset_sqid)
+    
     document = Document.objects.create(
         title=payload.title,
         group=group,
         ocr_model=payload.ocr_model,
+        docling_preset=docling_preset,
         metadata=payload.metadata
     )
     return document
@@ -49,6 +56,7 @@ def upload_document(
     title: str = Form(...),
     group_sqid: str = Form(...),
     ocr_model: str = Form('deepseek-ocr'),
+    docling_preset_sqid: str = Form(None),
     metadata: str = Form('{}')
 ):
     """Upload a PDF document and start processing"""
@@ -66,6 +74,11 @@ def upload_document(
         metadata_dict = json.loads(metadata) if metadata else {}
     except json.JSONDecodeError:
         metadata_dict = {}
+    
+    # Get docling preset if specified
+    docling_preset = None
+    if docling_preset_sqid:
+        docling_preset = get_object_or_404(DoclingPreset, sqid=docling_preset_sqid)
 
     # Create document
     document = Document.objects.create(
@@ -73,6 +86,7 @@ def upload_document(
         group=group,
         original_pdf=file,
         ocr_model=ocr_model,
+        docling_preset=docling_preset,
         metadata=metadata_dict
     )
 
@@ -92,8 +106,18 @@ def get_document(request, sqid: str):
 def update_document(request, sqid: str, payload: DocumentUpdateSchema):
     """Update a document"""
     document = get_object_or_404(Document, sqid=sqid)
+    
+    # Handle docling_preset_sqid separately
+    data = payload.model_dump(exclude_unset=True)
+    if 'docling_preset_sqid' in data:
+        preset_sqid = data.pop('docling_preset_sqid')
+        if preset_sqid:
+            docling_preset = get_object_or_404(DoclingPreset, sqid=preset_sqid)
+            document.docling_preset = docling_preset
+        else:
+            document.docling_preset = None
 
-    for attr, value in payload.model_dump(exclude_unset=True).items():
+    for attr, value in data.items():
         setattr(document, attr, value)
 
     document.save()

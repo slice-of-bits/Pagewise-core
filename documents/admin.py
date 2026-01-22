@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Document, Page, Image, DeepSeekOCRSettings
+from .models import Document, Page, Image, DeepSeekOCRSettings, DoclingPreset
 
 
 class PageInline(admin.TabularInline):
@@ -25,7 +25,7 @@ class DocumentAdmin(admin.ModelAdmin):
 
     fieldsets = (
         (None, {
-            'fields': ('title', 'group', 'original_pdf', 'thumbnail', 'ocr_model')
+            'fields': ('title', 'group', 'original_pdf', 'thumbnail', 'ocr_model', 'docling_preset')
         }),
         ('Processing', {
             'fields': ('page_count', 'processing_status', 'processed_pages', 'processing_progress'),
@@ -56,6 +56,10 @@ class PageAdmin(admin.ModelAdmin):
         }),
         ('DeepSeek OCR Data', {
             'fields': ('ocr_references', 'bbox_visualization'),
+            'classes': ('collapse',)
+        }),
+        ('Docling Data', {
+            'fields': ('docling_json', 'docling_json_override'),
             'classes': ('collapse',)
         }),
         ('Metadata', {
@@ -110,4 +114,48 @@ class DeepSeekOCRSettingsAdmin(admin.ModelAdmin):
         if obj and obj.name == 'default':
             return False
         return super().has_delete_permission(request, obj)
+
+
+@admin.register(DoclingPreset)
+class DoclingPresetAdmin(admin.ModelAdmin):
+    list_display = ['name', 'is_default', 'pipeline_type', 'ocr_engine', 'created_at']
+    list_filter = ['is_default', 'pipeline_type', 'ocr_engine', 'created_at']
+    search_fields = ['name']
+    readonly_fields = ['sqid', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'is_default', 'pipeline_type')
+        }),
+        ('OCR Settings', {
+            'fields': ('ocr_engine', 'force_ocr', 'ocr_languages'),
+        }),
+        ('VLM Settings', {
+            'fields': ('vlm_model',),
+        }),
+        ('Picture Description', {
+            'fields': ('enable_picture_description', 'picture_description_prompt'),
+            'classes': ('collapse',)
+        }),
+        ('Table Structure', {
+            'fields': ('enable_table_structure', 'table_former_mode'),
+            'classes': ('collapse',)
+        }),
+        ('Enrichments', {
+            'fields': ('enable_code_enrichment', 'enable_formula_enrichment'),
+            'classes': ('collapse',)
+        }),
+        ('Layout Filters', {
+            'fields': ('filter_orphan_clusters', 'filter_empty_clusters'),
+            'classes': ('collapse',)
+        }),
+        ('Advanced', {
+            'fields': ('advanced_settings',),
+            'classes': ('collapse',)
+        }),
+        ('Metadata', {
+            'fields': ('sqid', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
