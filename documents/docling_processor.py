@@ -7,7 +7,6 @@ import os
 import logging
 import tempfile
 from typing import Dict, Any, List, Optional
-from pathlib import Path
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage

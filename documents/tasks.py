@@ -512,7 +512,6 @@ def update_document_progress(document_id: int):
 def process_page_with_docling_task(page_id: int):
     """Process a single page with Docling using the document's preset"""
     try:
-        from documents.models import DoclingPreset
         from documents.docling_processor import process_page_with_docling
         
         page = Page.objects.get(id=page_id)
