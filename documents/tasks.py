@@ -3,6 +3,7 @@ import logging
 import tempfile
 import time
 import json
+import shutil
 
 from celery import shared_task
 from django.core.files.base import ContentFile
@@ -604,7 +605,6 @@ def process_page_with_docling_task(page_id: int):
             # Clean up output directory
             if output_dir and os.path.exists(output_dir):
                 try:
-                    import shutil
                     shutil.rmtree(output_dir)
                 except (OSError, PermissionError):
                     pass

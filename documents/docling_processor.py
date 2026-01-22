@@ -47,6 +47,7 @@ class DoclingProcessor:
                 TableStructureOptions,
                 TableFormerMode as DoclingTableFormerMode,
                 LayoutOptions,
+                PictureDescriptionVlmOptions,
             )
             from docling.pipeline.vlm_pipeline import VlmPipeline
             from docling.datamodel import vlm_model_specs
