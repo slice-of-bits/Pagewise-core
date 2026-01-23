@@ -1,6 +1,6 @@
 # DeepSeek-OCR Integration Summary
 
-This document summarizes the changes made to integrate DeepSeek-OCR via Ollama as a replacement for Docling in the Pagewise-core project.
+This document summarizes the changes made to integrate DeepSeek-OCR via Ollama as a replacement for Docling in the DocPond-core project.
 
 ## Overview
 
@@ -152,7 +152,7 @@ The integration maintains backward compatibility:
 curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
-  -F "group_sqid=bucket_sqid_here" \
+  -F "pond_sqid=pond_sqid_here" \
   -F "ocr_model=deepseek-ocr"
 ```
 

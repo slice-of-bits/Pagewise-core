@@ -1,6 +1,6 @@
 # Docling Integration Guide
 
-This document explains how to use Docling for document processing in Pagewise-core.
+This document explains how to use Docling for document processing in DocPond-core.
 
 ## Overview
 
@@ -57,7 +57,7 @@ curl -X POST "http://localhost:8000/api/docling-presets/" \
 curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
-  -F "group_sqid=<group_sqid>" \
+  -F "pond_sqid=<pond_sqid>" \
   -F "docling_preset_sqid=<preset_sqid>"
 ```
 
