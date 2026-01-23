@@ -1,5 +1,5 @@
 [project]
-name = "pagewise-core"
+name = "docpond-core"
 version = "0.1.0"
 description = "Document management backend for scanned books with page-level search"
 readme = "README.md"

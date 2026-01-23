@@ -1,6 +1,6 @@
 from django.db import models
 
-from pagewise.models import BaseModel
+from docpond.models import BaseModel
 
 
 # Create your models here.

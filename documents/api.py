@@ -16,7 +16,7 @@ from documents.schemas import (
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
 from documents.tasks import process_document, process_page
-from groups.models import Group
+from ponds.models import Pond
 
 router = Router()
 
@@ -24,8 +24,8 @@ router = Router()
 @router.get("/documents/", response=List[DocumentSchema])
 @paginate
 def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
-    """Get all documents, optionally filtered by bucket"""
-    queryset = Document.objects.select_related('group').all()
+    """Get all documents, optionally filtered by pond"""
+    queryset = Document.objects.select_related('pond').all()
     queryset = filters.filter(queryset)
     return queryset
 
@@ -33,7 +33,7 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 @router.post("/documents/", response=DocumentSchema)
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
-    group = get_object_or_404(Group, sqid=payload.group_sqid)
+    pond = get_object_or_404(Pond, sqid=payload.pond_sqid)
     
     # Get docling preset if specified
     docling_preset = None
@@ -42,7 +42,7 @@ def create_document(request, payload: DocumentCreateSchema):
     
     document = Document.objects.create(
         title=payload.title,
-        group=group,
+        pond=pond,
         ocr_model=payload.ocr_model,
         docling_preset=docling_preset,
         metadata=payload.metadata

@@ -1,7 +1,7 @@
 from django.db import models
 from django_sqids import SqidsField
 
-from pagewise.fields import ModelSeedSqidsField
+from docpond.fields import ModelSeedSqidsField
 
 
 class BaseModel(models.Model):

@@ -1,11 +1,11 @@
 from django.db import models
 from django.utils import timezone
 
-from pagewise.models import BaseModel
-from pagewise.fields import ModelSeedSqidsField
+from docpond.models import BaseModel
+from docpond.fields import ModelSeedSqidsField
 
 
-class Group(BaseModel):
+class Pond(BaseModel):
     name = models.CharField(max_length=100)
     description = models.TextField(null=True, blank=True)
 
@@ -13,16 +13,16 @@ class Group(BaseModel):
         return self.name
 
 
-class GroupShare(BaseModel):
-    """Public share link for a group with expiration and usage tracking"""
+class PondShare(BaseModel):
+    """Public share link for a pond with expiration and usage tracking"""
     sqid = ModelSeedSqidsField(min_length=12)
 
-    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="shares")
+    pond = models.ForeignKey(Pond, on_delete=models.CASCADE, related_name="shares")
     expire_date = models.DateTimeField()
     access_count = models.PositiveIntegerField(default=0)
 
     def __str__(self):
-        return f"Share {self.sqid} for {self.group.name}"
+        return f"Share {self.sqid} for {self.pond.name}"
 
     @property
     def is_expired(self):

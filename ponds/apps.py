@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 
 
-class GroupsConfig(AppConfig):
+class PondsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'groups'
+    name = 'ponds'
     verbose_name = 'Groups'

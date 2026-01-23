@@ -2,38 +2,38 @@ from django.test import TestCase
 from django.utils import timezone
 from datetime import timedelta
 
-from groups.models import Group, GroupShare
+from ponds.models import Pond, PondShare
 
 
-class GroupModelTests(TestCase):
-    def test_create_group(self):
-        """Test creating a group"""
-        group = Group.objects.create(
-            name="Test Group",
+class PondModelTests(TestCase):
+    def test_create_pond(self):
+        """Test creating a pond"""
+        pond = Pond.objects.create(
+            name="Test Pond",
             description="Test Description"
         )
-        self.assertEqual(group.name, "Test Group")
-        self.assertEqual(group.description, "Test Description")
-        self.assertIsNotNone(group.sqid)
+        self.assertEqual(pond.name, "Test Pond")
+        self.assertEqual(pond.description, "Test Description")
+        self.assertIsNotNone(pond.sqid)
 
-    def test_group_str(self):
-        """Test group string representation"""
-        group = Group.objects.create(name="Test Group")
-        self.assertEqual(str(group), "Test Group")
+    def test_pond_str(self):
+        """Test pond string representation"""
+        pond = Pond.objects.create(name="Test Pond")
+        self.assertEqual(str(pond), "Test Pond")
 
 
-class GroupShareModelTests(TestCase):
+class PondShareModelTests(TestCase):
     def setUp(self):
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
 
-    def test_create_group_share(self):
-        """Test creating a group share"""
+    def test_create_pond_share(self):
+        """Test creating a pond share"""
         expire_date = timezone.now() + timedelta(days=7)
-        share = GroupShare.objects.create(
-            group=self.group,
+        share = PondShare.objects.create(
+            pond=self.pond,
             expire_date=expire_date
         )
-        self.assertEqual(share.group, self.group)
+        self.assertEqual(share.pond, self.pond)
         self.assertEqual(share.access_count, 0)
         self.assertIsNotNone(share.sqid)
         self.assertGreaterEqual(len(share.sqid), 12)  # Min length should be 12
@@ -42,16 +42,16 @@ class GroupShareModelTests(TestCase):
         """Test expired check"""
         # Not expired
         future_date = timezone.now() + timedelta(days=1)
-        share = GroupShare.objects.create(
-            group=self.group,
+        share = PondShare.objects.create(
+            pond=self.pond,
             expire_date=future_date
         )
         self.assertFalse(share.is_expired)
 
         # Expired
         past_date = timezone.now() - timedelta(days=1)
-        expired_share = GroupShare.objects.create(
-            group=self.group,
+        expired_share = PondShare.objects.create(
+            pond=self.pond,
             expire_date=past_date
         )
         self.assertTrue(expired_share.is_expired)
@@ -59,8 +59,8 @@ class GroupShareModelTests(TestCase):
     def test_increment_access(self):
         """Test incrementing access count"""
         expire_date = timezone.now() + timedelta(days=7)
-        share = GroupShare.objects.create(
-            group=self.group,
+        share = PondShare.objects.create(
+            pond=self.pond,
             expire_date=expire_date
         )
 

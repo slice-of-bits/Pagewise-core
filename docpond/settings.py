@@ -37,7 +37,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'storages',  # For S3/MinIO storage
 
-    'groups',
+    'ponds',
     'documents',
 ]
 
@@ -52,7 +52,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'pagewise.urls'
+ROOT_URLCONF = 'docpond.urls'
 
 TEMPLATES = [
     {
@@ -70,7 +70,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'pagewise.wsgi.application'
+WSGI_APPLICATION = 'docpond.wsgi.application'
 
 
 # Database
@@ -135,7 +135,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # S3/MinIO Storage Configuration (Always enabled)
 AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', 'user')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', 'password')
-AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'pagewise-documents')
+AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'docpond-documents')
 AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', 'http://localhost:9000')
 AWS_S3_USE_SSL = os.environ.get('AWS_S3_USE_SSL', 'False').lower() == 'true'
 

@@ -1,19 +1,19 @@
 from django.contrib import admin
-from groups.models import Group, GroupShare
+from ponds.models import Pond, PondShare
 
 
-@admin.register(Group)
-class GroupAdmin(admin.ModelAdmin):
+@admin.register(Pond)
+class PondAdmin(admin.ModelAdmin):
     list_display = ('name', 'sqid', 'created_at', 'updated_at')
     search_fields = ('name', 'description')
     readonly_fields = ('sqid', 'created_at', 'updated_at')
 
 
-@admin.register(GroupShare)
-class GroupShareAdmin(admin.ModelAdmin):
-    list_display = ('sqid', 'group', 'expire_date', 'access_count', 'is_expired', 'created_at')
+@admin.register(PondShare)
+class PondShareAdmin(admin.ModelAdmin):
+    list_display = ('sqid', 'pond', 'expire_date', 'access_count', 'is_expired', 'created_at')
     list_filter = ('expire_date', 'created_at')
-    search_fields = ('sqid', 'group__name')
+    search_fields = ('sqid', 'pond__name')
     readonly_fields = ('sqid', 'created_at', 'updated_at', 'is_expired')
 
     def is_expired(self, obj):

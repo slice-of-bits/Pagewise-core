@@ -4,22 +4,22 @@ from django.core.files.storage import default_storage
 from django.conf import settings
 import os
 
-from pagewise.models import BaseModel
+from docpond.models import BaseModel
 
 
 def document_upload_path(instance, filename):
-    """Generate upload path for documents: /{group_name}/{document_title}/"""
-    group_name = instance.group.name
+    """Generate upload path for documents: /{pond_name}/{document_title}/"""
+    pond_name = instance.pond.name
     # Clean filename for filesystem
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{clean_title}.pdf"
+    return f"{pond_name}/{clean_title}/{clean_title}.pdf"
 
 
 def thumbnail_upload_path(instance, filename):
     """Generate upload path for thumbnails"""
-    group_name = instance.group.name
+    pond_name = instance.pond.name
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{clean_title}-cover.jpg"
+    return f"{pond_name}/{clean_title}/{clean_title}-cover.jpg"
 
 
 class ProcessingStatus(models.TextChoices):
@@ -30,7 +30,7 @@ class ProcessingStatus(models.TextChoices):
 
 
 class Document(BaseModel):
-    group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name="documents")
+    pond = models.ForeignKey('ponds.Pond', on_delete=models.CASCADE, related_name="documents")
 
     title = models.CharField(max_length=500)
     thumbnail = models.FileField(
@@ -76,17 +76,17 @@ class Document(BaseModel):
         return (self.processed_pages / self.page_count) * 100
 
 def page_upload_path(instance, filename):
-    """Generate upload path for individual pages: /{group}/{book-name}/{page-number}/page-{number}.pdf"""
-    group_name = instance.document.group.name
+    """Generate upload path for individual pages: /{pond}/{book-name}/{page-number}/page-{number}.pdf"""
+    pond_name = instance.document.pond.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.pdf"
+    return f"{pond_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.pdf"
 
 
 def bbox_visualization_upload_path(instance, filename):
-    """Generate upload path for bbox visualization: /{group}/{book-name}/{page-number}/page-{number}-bbox.jpg"""
-    group_name = instance.document.group.name
+    """Generate upload path for bbox visualization: /{pond}/{book-name}/{page-number}/page-{number}-bbox.jpg"""
+    pond_name = instance.document.pond.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}-bbox.jpg"
+    return f"{pond_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}-bbox.jpg"
 
 
 class Page(BaseModel):
@@ -135,10 +135,10 @@ class Page(BaseModel):
         return f"{self.document.title} - Page {self.page_number}"
 
 def image_upload_path(instance, filename):
-    """Generate upload path for extracted images: /{group}/{book-name}/{page-number}/images/{image-id}.jpg"""
-    group_name = instance.page.document.group.name
+    """Generate upload path for extracted images: /{pond}/{book-name}/{page-number}/images/{image-id}.jpg"""
+    pond_name = instance.page.document.pond.name
     clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
+    return f"{pond_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
 
 
 class Image(BaseModel):

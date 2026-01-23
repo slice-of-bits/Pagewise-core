@@ -60,7 +60,7 @@ class DocumentSchema(ModelSchema):
 
 class DocumentCreateSchema(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
-    group_sqid: str
+    pond_sqid: str
     ocr_model: Optional[str] = 'deepseek-ocr'  # Allow selection of OCR model
     docling_preset_sqid: Optional[str] = None  # Allow selection of Docling preset
     metadata: Optional[dict] = {}
@@ -232,7 +232,7 @@ class SearchFilterSchema(FilterSchema):
     q: Optional[str] = None  # Handle search manually in the API function
     min_score: Optional[float] = Field(default=0.001, ge=0.0, le=1.0)
     document_title: Annotated[Optional[str], FilterLookup("document__title__icontains")] = None
-    group_name: Annotated[Optional[str], FilterLookup("document__group__name__icontains")] = None
+    pond_name: Annotated[Optional[str], FilterLookup("document__pond__name__icontains")] = None
 
     def custom_expression(self) -> Q:
         """Custom filtering logic for the search schema"""
@@ -242,9 +242,9 @@ class SearchFilterSchema(FilterSchema):
         if self.document_title:
             q &= Q(document__title__icontains=self.document_title)
 
-        # Handle group name filtering
-        if self.group_name:
-            q &= Q(document__group__name__icontains=self.group_name)
+        # Handle pond name filtering
+        if self.pond_name:
+            q &= Q(document__pond__name__icontains=self.pond_name)
 
         # Note: q (search query) and min_score are handled in the API function
         return q
