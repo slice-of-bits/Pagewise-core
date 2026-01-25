@@ -176,7 +176,6 @@ curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
   -F "pond_sqid=pond_sqid_here" \
-  -F "ocr_model=deepseek-ocr" \
   -F "metadata={\"author\": \"John Doe\"}"
 ```
 

@@ -175,7 +175,6 @@ Control which elements to include in the output:
 
 Documents can be processed with either:
 1. **Docling**: Set `docling_preset_sqid` when uploading
-2. **DeepSeek OCR** (legacy): Leave `docling_preset_sqid` empty and set `ocr_model`
 
 ## Data Storage
 

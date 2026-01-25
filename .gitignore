@@ -163,3 +163,4 @@ docker-compose.override.yml
 *.backup
 
 s3-data
+postgres_data

@@ -39,6 +39,8 @@ INSTALLED_APPS = [
 
     'ponds',
     'documents',
+    'ocr_presets',
+    'docling_presets',
 ]
 
 MIDDLEWARE = [
@@ -137,7 +139,6 @@ AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID', 'user')
 AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY', 'password')
 AWS_STORAGE_BUCKET_NAME = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'docpond-documents')
 AWS_S3_ENDPOINT_URL = os.environ.get('AWS_S3_ENDPOINT_URL', 'http://localhost:9000')
-AWS_S3_USE_SSL = os.environ.get('AWS_S3_USE_SSL', 'False').lower() == 'true'
 
 # Custom domain for file URLs (optional)
 AWS_S3_CUSTOM_DOMAIN = os.environ.get('AWS_S3_CUSTOM_DOMAIN')

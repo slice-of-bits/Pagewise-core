@@ -97,6 +97,7 @@ class DoclingProcessor:
         picture_description_options = None
         if self.preset.enable_picture_description:
             picture_description_options = PictureDescriptionVlmOptions(
+                repo_id="ibm-granite/granite-docling-258M",  # Default VLM model
                 prompt=self.preset.picture_description_prompt,
             )
         
@@ -197,6 +198,41 @@ class DoclingProcessor:
                 force_full_page_ocr=force_ocr,
             )
     
+    def _generate_page_image(self, page, pdf_path: str):
+        """
+        Generate a preview image of the page for bbox visualization.
+
+        Args:
+            page: Page model instance
+            pdf_path: Path to the temporary PDF file
+        """
+        try:
+            import fitz  # PyMuPDF
+
+            # Open the PDF and render the first (and only) page
+            pdf_doc = fitz.open(pdf_path)
+            try:
+                first_page = pdf_doc[0]
+
+                # Render page to image at 2x zoom for better quality
+                mat = fitz.Matrix(2, 2)
+                pix = first_page.get_pixmap(matrix=mat)
+                img_data = pix.tobytes("jpg")
+
+                # Save page image using Django FileField
+                from django.core.files.base import ContentFile
+                content_file = ContentFile(img_data, name=f"page-{page.page_number}.jpg")
+                page.page_image.save(f"page-{page.page_number}.jpg", content_file, save=True)
+
+                logger.info(f"Generated page image for page {page.page_number}")
+
+            finally:
+                pdf_doc.close()
+
+        except Exception as e:
+            logger.error(f"Error generating page image for page {page.page_number}: {str(e)}")
+            # Don't raise - continue processing even if image generation fails
+
     def process_page(self, page, output_dir: str) -> Dict[str, Any]:
         """
         Process a single page with Docling.
@@ -228,6 +264,9 @@ class DoclingProcessor:
                 pdf_path = tmp_pdf.name
             
             try:
+                # Generate page image for bbox visualization
+                self._generate_page_image(page, pdf_path)
+
                 # Convert document
                 logger.info(f"Processing page {page.page_number} with Docling preset {self.preset.name}")
                 result = self.converter.convert(pdf_path)
@@ -242,20 +281,30 @@ class DoclingProcessor:
                 images = []
                 if result.document.pictures:
                     for idx, picture in enumerate(result.document.pictures):
-                        # Save picture
-                        if hasattr(picture, 'image') and picture.image:
-                            image_filename = f"image_{idx}.png"
-                            image_path = os.path.join(output_dir, image_filename)
-                            
-                            # Save image to output directory
-                            picture.image.save(image_path)
-                            
-                            images.append({
-                                'index': idx,
-                                'path': image_path,
-                                'caption': picture.caption if hasattr(picture, 'caption') else '',
-                            })
-                
+                        try:
+                            # Docling returns ImageRef objects which have a pil_image property
+                            # that gives us a PIL Image object
+                            if hasattr(picture, 'image') and picture.image:
+                                image_filename = f"image_{idx}.png"
+                                image_path = os.path.join(output_dir, image_filename)
+
+                                # Get PIL image from ImageRef
+                                if hasattr(picture.image, 'pil_image'):
+                                    pil_img = picture.image.pil_image
+                                    pil_img.save(image_path, 'PNG')
+
+                                    images.append({
+                                        'index': idx,
+                                        'path': image_path,
+                                        'caption': picture.caption if hasattr(picture, 'caption') else '',
+                                    })
+                                    logger.info(f"Extracted image {idx} from page")
+                                else:
+                                    logger.warning(f"Image {idx} does not have pil_image property")
+                        except Exception as img_error:
+                            logger.error(f"Error extracting image {idx}: {str(img_error)}")
+                            # Continue with other images
+
                 return {
                     'docling_json': docling_json,
                     'markdown': markdown,
