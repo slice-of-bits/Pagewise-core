@@ -21,27 +21,21 @@ class DoclingPresetAdmin(admin.ModelAdmin):
         }),
         ('Picture Description', {
             'fields': ('enable_picture_description', 'picture_description_prompt'),
-            'classes': ('collapse',)
         }),
         ('Table Structure', {
             'fields': ('enable_table_structure', 'table_former_mode'),
-            'classes': ('collapse',)
         }),
         ('Enrichments', {
             'fields': ('enable_code_enrichment', 'enable_formula_enrichment'),
-            'classes': ('collapse',)
         }),
         ('Layout Filters', {
             'fields': ('filter_orphan_clusters', 'filter_empty_clusters'),
-            'classes': ('collapse',)
         }),
         ('Advanced', {
             'fields': ('advanced_settings',),
-            'classes': ('collapse',)
         }),
         ('Metadata', {
             'fields': ('sqid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
         }),
     )
 

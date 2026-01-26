@@ -35,6 +35,8 @@ class PageDetailsSchema(ModelSchema):
             'page_pdf',
             'page_image',
             'ocr_markdown_raw',
+            'docling_json',
+            'docling_json_override',
             'text_markdown_clean',
             'processing_status',
             'metadata',
@@ -72,23 +74,6 @@ class DocumentUpdateSchema(BaseModel):
     docling_preset_sqid: Optional[str] = None  # Allow updating Docling preset
     ocr_preset_sqid: Optional[str] = None  # Allow updating OCR preset
     metadata: Optional[dict] = None
-
-
-class PageDetailSchema(ModelSchema):
-    class Meta:
-        model = Page
-        fields = [
-            'sqid',
-            'page_number',
-            'page_pdf',
-            'page_image',
-            'ocr_markdown_raw',
-            'text_markdown_clean',
-            'processing_status',
-            'metadata',
-            'created_at',
-            'updated_at',
-        ]
 
 
 class SearchPageSchema(ModelSchema):
