@@ -13,27 +13,27 @@ router = Router()
 
 
 # Pond endpoints
-@router.get("/", response=List[PondSchema])
+@router.get("/ponds", response=List[PondSchema])
 def list_ponds(request):
     """Get all ponds"""
     return Pond.objects.all()
 
 
-@router.post("/", response=PondSchema)
+@router.post("/ponds", response=PondSchema)
 def create_pond(request, payload: PondCreateSchema):
     """Create a new pond"""
     pond = Pond.objects.create(**payload.model_dump())
     return pond
 
 
-@router.get("/{sqid}", response=PondSchema)
+@router.get("/ponds/{sqid}", response=PondSchema)
 def get_pond(request, sqid: str):
     """Get a specific pond by sqid"""
     pond = get_object_or_404(Pond, sqid=sqid)
     return pond
 
 
-@router.put("/{sqid}", response=PondSchema)
+@router.put("/ponds/{sqid}", response=PondSchema)
 def update_pond(request, sqid: str, payload: PondUpdateSchema):
     """Update a pond"""
     pond = get_object_or_404(Pond, sqid=sqid)
@@ -45,7 +45,7 @@ def update_pond(request, sqid: str, payload: PondUpdateSchema):
     return pond
 
 
-@router.delete("/{sqid}")
+@router.delete("/ponds/{sqid}")
 def delete_pond(request, sqid: str):
     """Delete a pond"""
     pond = get_object_or_404(Pond, sqid=sqid)
@@ -54,7 +54,7 @@ def delete_pond(request, sqid: str):
 
 
 # Pond Share endpoints
-@router.get("/{sqid}/shares", response=List[PondShareSchema])
+@router.get("/ponds/{sqid}/shares", response=List[PondShareSchema])
 def list_pond_shares(request, sqid: str):
     """Get all share links for a pond"""
     pond = get_object_or_404(Pond, sqid=sqid)
@@ -62,7 +62,7 @@ def list_pond_shares(request, sqid: str):
     return [PondShareSchema.from_pond_share(share) for share in shares]
 
 
-@router.post("/shares", response=PondShareSchema)
+@router.post("/ponds/shares", response=PondShareSchema)
 def create_pond_share(request, payload: PondShareCreateSchema):
     """Create a new share link for a pond"""
     pond = get_object_or_404(Pond, sqid=payload.pond_sqid)
@@ -75,14 +75,14 @@ def create_pond_share(request, payload: PondShareCreateSchema):
     return PondShareSchema.from_pond_share(share)
 
 
-@router.get("/shares/{share_sqid}", response=PondShareSchema)
+@router.get("/ponds/shares/{share_sqid}", response=PondShareSchema)
 def get_pond_share(request, share_sqid: str):
     """Get details about a specific share link"""
     share = get_object_or_404(PondShare, sqid=share_sqid)
     return PondShareSchema.from_pond_share(share)
 
 
-@router.delete("/shares/{share_sqid}")
+@router.delete("/ponds/shares/{share_sqid}")
 def delete_pond_share(request, share_sqid: str):
     """Delete a share link"""
     share = get_object_or_404(PondShare, sqid=share_sqid)
@@ -91,7 +91,7 @@ def delete_pond_share(request, share_sqid: str):
 
 
 # Public share endpoint (no authentication needed)
-@router.get("/public/{share_sqid}", response=PublicPondSchema, auth=None)
+@router.get("/ponds/public/{share_sqid}", response=PublicPondSchema, auth=None)
 def get_public_pond(request, share_sqid: str):
     """Get a pond via public share link (increments access count)"""
     share = get_object_or_404(PondShare.objects.select_related('pond'), sqid=share_sqid)

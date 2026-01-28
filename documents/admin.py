@@ -29,11 +29,9 @@ class DocumentAdmin(admin.ModelAdmin):
         }),
         ('Processing', {
             'fields': ('page_count', 'processing_status', 'processed_pages', 'processing_progress'),
-            'classes': ('collapse',)
         }),
         ('Metadata', {
             'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
         }),
     )
 
@@ -75,7 +73,6 @@ class ImageAdmin(admin.ModelAdmin):
         }),
         ('Metadata', {
             'fields': ('metadata', 'sqid', 'created_at', 'updated_at'),
-            'classes': ('collapse',)
         }),
     )
 

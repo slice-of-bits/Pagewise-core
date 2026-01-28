@@ -7,7 +7,6 @@ from django.db.models import Value
 from collections import defaultdict
 
 from documents.models import Document, Page, Image, ProcessingStatus
-from documents.models import Document, Page, Image, ProcessingStatus
 from docling_presets.models import DoclingPreset
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,

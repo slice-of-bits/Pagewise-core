@@ -1,12 +1,11 @@
 from typing import List, Optional
 from typing import Annotated
 
-from ninja import ModelSchema, FilterSchema, FilterLookup
-from pydantic import BaseModel, Field
-from datetime import datetime
+from ninja import ModelSchema, FilterSchema, FilterLookup, Schema
 from django.db.models import Q
+from pydantic import Field
 
-from documents.models import Document, Page
+from documents.models import Document, Page, Image
 
 
 class DocumentListFilterSchema(FilterSchema):
@@ -61,19 +60,28 @@ class DocumentSchema(ModelSchema):
             'updated_at',
         ]
 
-class DocumentCreateSchema(BaseModel):
-    title: str = Field(..., min_length=1, max_length=500)
-    pond_sqid: str
-    docling_preset_sqid: Optional[str] = None  # Allow selection of Docling preset
-    ocr_preset_sqid: Optional[str] = None  # Allow selection of OCR preset
-    metadata: Optional[dict] = {}
+class DocumentCreateSchema(DocumentSchema):
+    class Meta:
+        model = Document
+        fields = [
+            'title',
+            'pond_sqid',
+            'docling_preset',
+            'ocr_preset',
+            'metadata',
+        ]
 
 
-class DocumentUpdateSchema(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=500)
-    docling_preset_sqid: Optional[str] = None  # Allow updating Docling preset
-    ocr_preset_sqid: Optional[str] = None  # Allow updating OCR preset
-    metadata: Optional[dict] = None
+class DocumentUpdateSchema(ModelSchema):
+    class Meta:
+        model = Document
+        fields = [
+            'title',
+            'docling_preset',
+            'ocr_preset',
+            'metadata',
+        ]
+
 
 
 class SearchPageSchema(ModelSchema):
@@ -91,46 +99,44 @@ class SearchPageSchema(ModelSchema):
         ]
 
 
-class PageUpdateSchema(BaseModel):
-    ocr_markdown_raw: Optional[str] = None
-    text_markdown_clean: Optional[str] = None
-    metadata: Optional[dict] = None
+class PageUpdateSchema(ModelSchema):
+
+    class Meta:
+        model = Page
+        fields = [
+            'ocr_markdown_raw',
+            'text_markdown_clean',
+            'metadata',
+        ]
+
+class ImageSchema(ModelSchema):
+    class Meta:
+        model = Image
+        fields = [
+            'sqid',
+            'image_file',
+            'caption',
+            'metadata',
+            'created_at',
+            'updated_at',
+        ]
 
 
-class ImageSchema(BaseModel):
-    sqid: str
-    image_file: str
-    caption: Optional[str] = None
-    metadata: dict
-    created_at: datetime
-    updated_at: datetime
+class SearchDocumentSchema(ModelSchema):
+    pages: PageDetailsSchema
 
-    @staticmethod
-    def resolve_image_file(obj):
-        return obj.image_file.url if obj.image_file else None
-
-    class Config:
-        from_attributes = True
+    class Meta:
+        model = Document
+        fields = [
+            'sqid',
+            'title',
+            'thumbnail',
+        ]
 
 
-
-class SearchDocumentSchema(BaseModel):
-    sqid: str
-    title: str
-    thumbnail: Optional[str] = None
-    pages: List[SearchPageSchema]
-    max_relevance_score: float
-
-    class Config:
-        from_attributes = True
-
-
-class SearchResultSchema(BaseModel):
-    documents: List[SearchDocumentSchema]
+class SearchResultSchema(Schema):
+    documents: List[DocumentSchema]
     total_results: int
-
-    class Config:
-        from_attributes = True
 
 class SearchFilterSchema(FilterSchema):
     q: Optional[str] = None  # Handle search manually in the API function

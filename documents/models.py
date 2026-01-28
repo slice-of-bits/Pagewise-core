@@ -1,9 +1,4 @@
-# from django.contrib.postgres.search import SearchVectorField
 from django.db import models
-from django.core.files.storage import default_storage
-from django.conf import settings
-import os
-
 from docpond.models import BaseModel
 
 
@@ -24,6 +19,7 @@ def thumbnail_upload_path(instance, filename):
 
 class ProcessingStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
+    RUNNING_OCR = 'running_ocr', 'Running OCR'
     PROCESSING = 'processing', 'Processing'
     COMPLETED = 'completed', 'Completed'
     FAILED = 'failed', 'Failed'
@@ -135,9 +131,6 @@ class Page(BaseModel):
         null=True,
         help_text="Corrected/overridden docling JSON data"
     )
-
-    # search
-    # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
 
     metadata = models.JSONField(default=dict, blank=True)
 

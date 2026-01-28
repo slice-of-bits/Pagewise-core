@@ -13,19 +13,16 @@ environ.Env.read_env(".env")
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-0nnekk03x9ox^b3k$+p#)v#(h7@guf^cxm3-8e#q=m5j+@00cv'
+SECRET_KEY = env("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env("DEBUG", bool, default=False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env("ALLOWED_HOSTS", default="*").split(",")
 
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173"
-]
+CORS_ALLOWED_ORIGINS = env("CORS_ALLOWED_ORIGINS", default=None).split(",")
 
 # Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -35,7 +32,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'corsheaders',
-    'storages',  # For S3/MinIO storage
 
     'ponds',
     'documents',
@@ -74,11 +70,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'docpond.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.1/ref/settings/#databases
-
-import os
 
 DATABASES = {
     "default": dj_database_url.parse(
@@ -126,7 +117,7 @@ USE_TZ = True
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Celery Configuration
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/0')
+CELERY_BROKER_URL = env('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_TIMEZONE = TIME_ZONE
 
 # Default primary key field type

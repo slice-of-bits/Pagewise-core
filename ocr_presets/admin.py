@@ -23,7 +23,6 @@ class OcrPresetAdmin(admin.ModelAdmin):
         }),
         ('Advanced', {
             'fields': ('rotate_pages', 'remove_vectors', 'advanced_settings'),
-            'classes': ('collapse',)
         }),
     )
 
