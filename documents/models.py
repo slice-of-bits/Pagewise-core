@@ -1,36 +1,32 @@
-# from django.contrib.postgres.search import SearchVectorField
 from django.db import models
-from django.core.files.storage import default_storage
-from django.conf import settings
-import os
-
-from pagewise.models import BaseModel
+from docpond.models import BaseModel
 
 
 def document_upload_path(instance, filename):
-    """Generate upload path for documents: /{group_name}/{document_title}/"""
-    group_name = instance.group.name
+    """Generate upload path for documents: /{pond_name}/{document_title}/"""
+    pond_name = instance.pond.name
     # Clean filename for filesystem
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{clean_title}.pdf"
+    return f"{pond_name}/{clean_title}/{clean_title}.pdf"
 
 
 def thumbnail_upload_path(instance, filename):
     """Generate upload path for thumbnails"""
-    group_name = instance.group.name
+    pond_name = instance.pond.name
     clean_title = "".join(c for c in instance.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{clean_title}-cover.jpg"
+    return f"{pond_name}/{clean_title}/{clean_title}-cover.jpg"
 
 
 class ProcessingStatus(models.TextChoices):
     PENDING = 'pending', 'Pending'
+    RUNNING_OCR = 'running_ocr', 'Running OCR'
     PROCESSING = 'processing', 'Processing'
     COMPLETED = 'completed', 'Completed'
     FAILED = 'failed', 'Failed'
 
 
 class Document(BaseModel):
-    group = models.ForeignKey('groups.Group', on_delete=models.CASCADE, related_name="documents")
+    pond = models.ForeignKey('ponds.Pond', on_delete=models.CASCADE, related_name="documents")
 
     title = models.CharField(max_length=500)
     thumbnail = models.FileField(
@@ -42,8 +38,25 @@ class Document(BaseModel):
     original_pdf = models.FileField(upload_to=document_upload_path)
     page_count = models.PositiveIntegerField(default=0)
 
-    # OCR model selection
-    ocr_model = models.CharField(max_length=100, default='deepseek-ocr')
+    # Docling preset (if using docling for processing)
+    docling_preset = models.ForeignKey(
+        'docling_presets.DoclingPreset',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+        help_text="Docling preset to use for processing"
+    )
+
+    # OCR preset (if using OCRmyPDF for preprocessing)
+    ocr_preset = models.ForeignKey(
+        'ocr_presets.OcrPreset',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='documents',
+        help_text="OCR preset to use for preprocessing (runs before page splitting)"
+    )
 
     # Processing status
     processing_status = models.CharField(
@@ -66,17 +79,24 @@ class Document(BaseModel):
         return (self.processed_pages / self.page_count) * 100
 
 def page_upload_path(instance, filename):
-    """Generate upload path for individual pages: /{group}/{book-name}/{page-number}/page-{number}.pdf"""
-    group_name = instance.document.group.name
+    """Generate upload path for individual pages: /{pond}/{book-name}/{page-number}/page-{number}.pdf"""
+    pond_name = instance.document.pond.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.pdf"
+    return f"{pond_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.pdf"
 
 
 def bbox_visualization_upload_path(instance, filename):
-    """Generate upload path for bbox visualization: /{group}/{book-name}/{page-number}/page-{number}-bbox.jpg"""
-    group_name = instance.document.group.name
+    """Generate upload path for bbox visualization: /{pond}/{book-name}/{page-number}/page-{number}-bbox.jpg"""
+    pond_name = instance.document.pond.name
     clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}-bbox.jpg"
+    return f"{pond_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}-bbox.jpg"
+
+
+def page_image_upload_path(instance, filename):
+    """Generate upload path for page image: /{pond}/{book-name}/{page-number}/page-{number}.jpg"""
+    pond_name = instance.document.pond.name
+    clean_title = "".join(c for c in instance.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+    return f"{pond_name}/{clean_title}/{instance.page_number}/page-{instance.page_number}.jpg"
 
 
 class Page(BaseModel):
@@ -84,6 +104,12 @@ class Page(BaseModel):
 
     page_number = models.PositiveIntegerField()
     page_pdf = models.FileField(upload_to=page_upload_path)
+    page_image = models.ImageField(
+        upload_to=page_image_upload_path,
+        blank=True,
+        null=True,
+        help_text="Preview image of the page"
+    )
 
     # OCR and processing status
     ocr_markdown_raw = models.TextField(blank=True)
@@ -94,12 +120,17 @@ class Page(BaseModel):
         default=ProcessingStatus.PENDING
     )
 
-    # DeepSeek OCR data
-    ocr_references = models.JSONField(blank=True, null=True)  # Store parsed references
-    bbox_visualization = models.ImageField(upload_to=bbox_visualization_upload_path, blank=True, null=True)  # Bbox debug image
-
-    # search
-    # search_vector = SearchVectorField(null=True)  # PostgreSQL specific
+    # Docling data
+    docling_json = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="Original docling JSON output"
+    )
+    docling_json_override = models.JSONField(
+        blank=True,
+        null=True,
+        help_text="Corrected/overridden docling JSON data"
+    )
 
     metadata = models.JSONField(default=dict, blank=True)
 
@@ -113,10 +144,10 @@ class Page(BaseModel):
         return f"{self.document.title} - Page {self.page_number}"
 
 def image_upload_path(instance, filename):
-    """Generate upload path for extracted images: /{group}/{book-name}/{page-number}/images/{image-id}.jpg"""
-    group_name = instance.page.document.group.name
+    """Generate upload path for extracted images: /{pond}/{book-name}/{page-number}/images/{image-id}.jpg"""
+    pond_name = instance.page.document.pond.name
     clean_title = "".join(c for c in instance.page.document.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-    return f"{group_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
+    return f"{pond_name}/{clean_title}/{instance.page.page_number}/images/{filename}"
 
 
 class Image(BaseModel):
@@ -146,34 +177,4 @@ class Image(BaseModel):
         super().save(*args, **kwargs)
 
 
-class DeepSeekOCRSettings(BaseModel):
-    """Configuration for DeepSeek OCR processing"""
-
-    name = models.CharField(max_length=100, default="default", unique=True)
-
-    # DeepSeek OCR Settings
-    default_model = models.CharField(max_length=100, default='deepseek-ocr')
-    default_prompt = models.TextField(default='<|grounding|>Convert the document to markdown.')
-
-    # Advanced settings JSON for additional configuration
-    settings_json = models.JSONField(default=dict, blank=True)
-
-    class Meta:
-        verbose_name = "DeepSeek OCR Settings"
-        verbose_name_plural = "DeepSeek OCR Settings"
-
-    def __str__(self):
-        return f"DeepSeek OCR Settings: {self.name}"
-
-    @classmethod
-    def get_default_settings(cls):
-        """Get or create default settings"""
-        settings, _ = cls.objects.get_or_create(
-            name='default',
-            defaults={
-                'default_model': 'deepseek-ocr',
-                'default_prompt': '<|grounding|>Convert the document to markdown.',
-            }
-        )
-        return settings
 

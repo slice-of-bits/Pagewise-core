@@ -6,16 +6,16 @@ from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Value
 from collections import defaultdict
 
-from documents.models import Document, Page, Image, DeepSeekOCRSettings
+from documents.models import Document, Page, Image, ProcessingStatus
+from docling_presets.models import DoclingPreset
 from documents.schemas import (
     DocumentSchema, DocumentCreateSchema, DocumentUpdateSchema,
     PageSchema, PageUpdateSchema, ImageSchema,
-    DeepSeekOCRSettingsSchema, DeepSeekOCRSettingsUpdateSchema,
     SearchResultSchema, SearchDocumentSchema, SearchPageSchema, DocumentListFilterSchema,
     PagesListFilterSchema, SearchFilterSchema, PageDetailsSchema
 )
 from documents.tasks import process_document, process_page
-from groups.models import Group
+from ponds.models import Pond
 
 router = Router()
 
@@ -23,8 +23,8 @@ router = Router()
 @router.get("/documents/", response=List[DocumentSchema])
 @paginate
 def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
-    """Get all documents, optionally filtered by bucket"""
-    queryset = Document.objects.select_related('group').all()
+    """Get all documents, optionally filtered by pond"""
+    queryset = Document.objects.select_related('pond').all()
     queryset = filters.filter(queryset)
     return queryset
 
@@ -32,11 +32,24 @@ def list_documents(request, filters: DocumentListFilterSchema = Query(...)):
 @router.post("/documents/", response=DocumentSchema)
 def create_document(request, payload: DocumentCreateSchema):
     """Create a new document"""
-    group = get_object_or_404(Group, sqid=payload.group_sqid)
+    pond = get_object_or_404(Pond, sqid=payload.pond_sqid)
+    
+    # Get docling preset if specified
+    docling_preset = None
+    if payload.docling_preset_sqid:
+        docling_preset = get_object_or_404(DoclingPreset, sqid=payload.docling_preset_sqid)
+    
+    # Get OCR preset if specified
+    from ocr_presets.models import OcrPreset
+    ocr_preset = None
+    if payload.ocr_preset_sqid:
+        ocr_preset = get_object_or_404(OcrPreset, sqid=payload.ocr_preset_sqid)
+
     document = Document.objects.create(
         title=payload.title,
-        group=group,
-        ocr_model=payload.ocr_model,
+        pond=pond,
+        docling_preset=docling_preset,
+        ocr_preset=ocr_preset,
         metadata=payload.metadata
     )
     return document
@@ -46,8 +59,9 @@ def upload_document(
     request,
     file: UploadedFile = File(...),
     title: str = Form(...),
-    group_sqid: str = Form(...),
-    ocr_model: str = Form('deepseek-ocr'),
+    pond_sqid: str = Form(...),
+    docling_preset_sqid: str = Form(None),
+    ocr_preset_sqid: str = Form(None),
     metadata: str = Form('{}')
 ):
     """Upload a PDF document and start processing"""
@@ -57,21 +71,30 @@ def upload_document(
     if not file.name.lower().endswith('.pdf'):
         return {"error": "Only PDF files are allowed"}, 400
 
-    # Get group
-    group = get_object_or_404(Group, sqid=group_sqid)
-
     # Parse metadata
     try:
         metadata_dict = json.loads(metadata) if metadata else {}
     except json.JSONDecodeError:
         metadata_dict = {}
+    
+    # Get docling preset if specified
+    docling_preset = None
+    if docling_preset_sqid:
+        docling_preset = get_object_or_404(DoclingPreset, sqid=docling_preset_sqid)
+
+    # Get OCR preset if specified
+    from ocr_presets.models import OcrPreset
+    ocr_preset = None
+    if ocr_preset_sqid:
+        ocr_preset = get_object_or_404(OcrPreset, sqid=ocr_preset_sqid)
 
     # Create document
     document = Document.objects.create(
         title=title,
-        group=group,
+        pond=get_object_or_404(Pond, sqid=pond_sqid),
         original_pdf=file,
-        ocr_model=ocr_model,
+        docling_preset=docling_preset,
+        ocr_preset=ocr_preset,
         metadata=metadata_dict
     )
 
@@ -84,15 +107,35 @@ def upload_document(
 @router.get("/documents/{sqid}", response=DocumentSchema)
 def get_document(request, sqid: str):
     """Get a specific document by sqid"""
-    return get_object_or_404(Document.objects.select_related('group'), sqid=sqid)
+    return get_object_or_404(Document.objects.select_related('pond'), sqid=sqid)
 
 
 @router.put("/documents/{sqid}", response=DocumentSchema)
 def update_document(request, sqid: str, payload: DocumentUpdateSchema):
     """Update a document"""
     document = get_object_or_404(Document, sqid=sqid)
+    
+    # Handle presets separately
+    data = payload.model_dump(exclude_unset=True)
 
-    for attr, value in payload.model_dump(exclude_unset=True).items():
+    if 'docling_preset_sqid' in data:
+        preset_sqid = data.pop('docling_preset_sqid')
+        if preset_sqid:
+            docling_preset = get_object_or_404(DoclingPreset, sqid=preset_sqid)
+            document.docling_preset = docling_preset
+        else:
+            document.docling_preset = None
+
+    if 'ocr_preset_sqid' in data:
+        from ocr_presets.models import OcrPreset
+        preset_sqid = data.pop('ocr_preset_sqid')
+        if preset_sqid:
+            ocr_preset = get_object_or_404(OcrPreset, sqid=preset_sqid)
+            document.ocr_preset = ocr_preset
+        else:
+            document.ocr_preset = None
+
+    for attr, value in data.items():
         setattr(document, attr, value)
 
     document.save()
@@ -159,18 +202,13 @@ def get_page_images(request, sqid: str):
 
 
 @router.post("/pages/{sqid}/reprocess")
-def reprocess_page(request, sqid: str, ocr_model: str = 'deepseek-ocr'):
+def reprocess_page(request, sqid: str):
     """
     Reprocess a page with specified OCR model.
     Clears old OCR data and starts reprocessing.
     Useful for development, testing, and production updates.
     """
     page = get_object_or_404(Page, sqid=sqid)
-    
-    # Update the document's OCR model if provided
-    if ocr_model:
-        page.document.ocr_model = ocr_model
-        page.document.save()
     
     # Clear old OCR data
     page.ocr_markdown_raw = ''
@@ -188,10 +226,8 @@ def reprocess_page(request, sqid: str, ocr_model: str = 'deepseek-ocr'):
     
     return {
         "success": True,
-        "message": f"Page {page.page_number} queued for reprocessing with model {ocr_model}",
         "task_id": task.id,
         "page_sqid": page.sqid,
-        "ocr_model": ocr_model
     }
 
 
@@ -213,7 +249,7 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         text_markdown_clean__isnull=False
     ).exclude(
         text_markdown_clean__exact=''
-    ).select_related('document', 'document__group')
+    ).select_related('document', 'document__pond')
 
     # Apply additional filters (document_title, bucket_name) using FilterSchema
     queryset = filters.filter(queryset)
@@ -238,12 +274,12 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         ).order_by('-created_at')
 
     # Group pages by document and calculate max scores
-    document_groups = defaultdict(list)
+    document_ponds = defaultdict(list)
     document_max_scores = {}
 
     for page in queryset:
         doc_id = page.document.id
-        document_groups[doc_id].append(page)
+        document_ponds[doc_id].append(page)
 
         # Track the maximum score for this document
         if doc_id not in document_max_scores:
@@ -253,7 +289,7 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
 
     # Create SearchDocumentSchema objects
     documents = []
-    for doc_id, pages in document_groups.items():
+    for doc_id, pages in document_ponds.items():
         document = pages[0].document
 
         # Create SearchPageSchema objects for this document
@@ -289,26 +325,6 @@ def search_pages(request, filters: SearchFilterSchema = Query(...)):
         total_results=queryset.count()
     )
 
-# DeepSeek OCR Settings endpoints
-@router.get("/settings/", response=DeepSeekOCRSettingsSchema)
-def get_ocr_settings(request):
-    """Get current DeepSeek OCR settings"""
-    settings = DeepSeekOCRSettings.get_default_settings()
-    return settings
-
-
-@router.put("/settings/", response=DeepSeekOCRSettingsSchema)
-def update_ocr_settings(request, payload: DeepSeekOCRSettingsUpdateSchema):
-    """Update DeepSeek OCR settings"""
-    settings = DeepSeekOCRSettings.get_default_settings()
-
-    for attr, value in payload.model_dump(exclude_unset=True).items():
-        setattr(settings, attr, value)
-
-    settings.save()
-    return settings
-
-
 def create_snippet(text: str, query: str, max_length: int = 300) -> str:
     """Create a text snippet around the search query"""
     query_lower = query.lower()
@@ -337,3 +353,4 @@ def create_snippet(text: str, query: str, max_length: int = 300) -> str:
         snippet = snippet + "..."
 
     return snippet
+

@@ -1,10 +1,10 @@
-# Pagewise Core - Document Management Backend
+# DocPond Core - Document Management Backend
 
 A comprehensive document management backend for scanned books with page-level search capabilities. Built with Django, designed to handle PDF documents with 100+ pages, extract text using Docling, and provide advanced search functionality at the page level.
 
 ## Features
 
-- **Document Management**: Upload and manage PDF documents organized in buckets
+- **Document Management**: Upload and manage PDF documents organized in ponds
 - **Page-Level Processing**: Each page is stored as a separate model for granular search
 - **Background Processing**: Celery-powered asynchronous document processing
 - **OCR & Text Extraction**: Uses DeepSeek-OCR via Ollama for advanced document understanding
@@ -13,7 +13,7 @@ A comprehensive document management backend for scanned books with page-level se
 - **Thumbnail Generation**: Automatic thumbnail generation from first page
 - **Progress Tracking**: Real-time processing progress monitoring
 - **Configurable Processing**: User-configurable OCR settings
-- **Advanced Search**: Full-text search with bucket and document filtering
+- **Advanced Search**: Full-text search with pond and document filtering
 - **REST API**: Django Ninja-powered API for all operations
 
 ## Architecture
@@ -43,7 +43,7 @@ A comprehensive document management backend for scanned books with page-level se
 Documents are organized in a structured file system:
 ```
 media/
-├── {bucket_name}/
+├── {pond_name}/
 │   ├── {document_title}/
 │   │   ├── {document_title}.pdf          # Original PDF
 │   │   ├── {document_title}-cover.jpg    # Thumbnail
@@ -72,7 +72,7 @@ media/
 1. **Clone and setup the project:**
    ```bash
    git clone <repository-url>
-   cd pagewise-core
+   cd docpond-core
    python -m venv .venv
    source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
@@ -125,17 +125,17 @@ Currently uses Django's built-in session authentication. Token authentication ca
 
 ### Endpoints
 
-#### Buckets
+#### Ponds
 
-- `GET /api/buckets/` - List all buckets
-- `POST /api/buckets/` - Create a new bucket
-- `GET /api/buckets/{sqid}` - Get bucket details
-- `PUT /api/buckets/{sqid}` - Update bucket
-- `DELETE /api/buckets/{sqid}` - Delete bucket
+- `GET /api/ponds/` - List all ponds
+- `POST /api/ponds/` - Create a new pond
+- `GET /api/ponds/{sqid}` - Get pond details
+- `PUT /api/ponds/{sqid}` - Update pond
+- `DELETE /api/ponds/{sqid}` - Delete pond
 
 #### Documents
 
-- `GET /api/documents/` - List documents (with optional bucket filtering)
+- `GET /api/documents/` - List documents (with optional pond filtering)
 - `POST /api/documents/` - Create document metadata
 - `POST /api/documents/upload/` - Upload PDF and start processing
 - `GET /api/documents/{sqid}` - Get document details
@@ -156,7 +156,7 @@ Currently uses Django's built-in session authentication. Token authentication ca
   ```json
   {
     "q": "search query",
-    "bucket_sqid": "optional_bucket_filter",
+    "pond_sqid": "optional_pond_filter",
     "document_sqid": "optional_document_filter",
     "limit": 20,
     "offset": 0
@@ -175,8 +175,7 @@ Currently uses Django's built-in session authentication. Token authentication ca
 curl -X POST "http://localhost:8000/api/documents/upload/" \
   -F "file=@document.pdf" \
   -F "title=My Document" \
-  -F "group_sqid=bucket_sqid_here" \
-  -F "ocr_model=deepseek-ocr" \
+  -F "pond_sqid=pond_sqid_here" \
   -F "metadata={\"author\": \"John Doe\"}"
 ```
 
@@ -192,8 +191,8 @@ curl -X POST "http://localhost:8000/api/search/" \
 
 ## Models
 
-### Bucket
-Groups for organizing documents.
+### Pond
+Ponds for organizing documents.
 
 ### Document
 Main document model with processing status tracking.
@@ -223,10 +222,10 @@ The system uses Celery for background processing with the following workflow:
 
 ```bash
 # Development
-celery -A pagewise worker --loglevel=info
+celery -A docpond worker --loglevel=info
 
 # Production
-celery -A pagewise worker --loglevel=info --concurrency=4
+celery -A docpond worker --loglevel=info --concurrency=4
 ```
 
 ## Configuration

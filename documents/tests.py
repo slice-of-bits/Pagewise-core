@@ -1,12 +1,7 @@
-import tempfile
-import os
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
-from unittest.mock import patch, MagicMock
-from documents.models import Document, Page, Image, DeepSeekOCRSettings, ProcessingStatus
-# from documents.tasks import process_document, generate_thumbnail, clean_markdown_text  # Commented out for now
-from groups.models import Group
-import json
+from documents.models import Document, Page, Image, ProcessingStatus
+from ponds.models import Pond
 
 
 def clean_markdown_text(raw_text: str) -> str:
@@ -30,17 +25,17 @@ def clean_markdown_text(raw_text: str) -> str:
 
 class DocumentModelTest(TestCase):
     def setUp(self):
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
         self.document = Document.objects.create(
             title="Test Document",
-            group=self.group,
+            pond=self.pond,
             original_pdf=SimpleUploadedFile("test.pdf", b"fake pdf content", content_type="application/pdf")
         )
 
     def test_document_creation(self):
         """Test document is created with correct attributes"""
         self.assertEqual(self.document.title, "Test Document")
-        self.assertEqual(self.document.group, self.group)
+        self.assertEqual(self.document.pond, self.pond)
         self.assertEqual(self.document.processing_status, ProcessingStatus.PENDING)
         self.assertEqual(self.document.processed_pages, 0)
         self.assertTrue(self.document.sqid)
@@ -63,10 +58,10 @@ class DocumentModelTest(TestCase):
 
 class PageModelTest(TestCase):
     def setUp(self):
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
         self.document = Document.objects.create(
             title="Test Document",
-            group=self.group,
+            pond=self.pond,
             original_pdf=SimpleUploadedFile("test.pdf", b"fake pdf content", content_type="application/pdf")
         )
         self.page = Page.objects.create(
@@ -99,23 +94,9 @@ class PageModelTest(TestCase):
             )
 
 
-class DeepSeekOCRSettingsTest(TestCase):
-    def test_get_default_settings(self):
-        """Test getting default settings creates them if they don't exist"""
-        settings = DeepSeekOCRSettings.get_default_settings()
-        self.assertEqual(settings.name, "default")
-        self.assertEqual(settings.default_model, "deepseek-ocr")
-
-    def test_singleton_behavior(self):
-        """Test that get_default_settings returns the same instance"""
-        settings1 = DeepSeekOCRSettings.get_default_settings()
-        settings2 = DeepSeekOCRSettings.get_default_settings()
-        self.assertEqual(settings1.id, settings2.id)
-
-
 class TasksTest(TestCase):
     def setUp(self):
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
 
     def test_clean_markdown_text(self):
         """Test markdown text cleaning function"""
@@ -133,10 +114,10 @@ class TasksTest(TestCase):
 
 class ImageModelTest(TestCase):
     def setUp(self):
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
         self.document = Document.objects.create(
             title="Test Document",
-            group=self.group,
+            pond=self.pond,
             original_pdf=SimpleUploadedFile("test.pdf", b"fake pdf content", content_type="application/pdf")
         )
         self.page = Page.objects.create(
@@ -164,18 +145,18 @@ class ImageModelTest(TestCase):
 class SearchAPITest(TestCase):
     def setUp(self):
         self.client = Client()
-        self.group = Group.objects.create(name="Test Group")
+        self.pond = Pond.objects.create(name="Test Pond")
 
         # Create test documents and pages
         self.document1 = Document.objects.create(
             title="Sailing Manual",
-            group=self.group,
+            pond=self.pond,
             original_pdf=SimpleUploadedFile("sailing.pdf", b"fake pdf content", content_type="application/pdf")
         )
 
         self.document2 = Document.objects.create(
             title="Navigation Guide",
-            group=self.group,
+            pond=self.pond,
             original_pdf=SimpleUploadedFile("nav.pdf", b"fake pdf content", content_type="application/pdf")
         )
 
